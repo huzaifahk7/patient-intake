@@ -20,7 +20,7 @@ Milestone 7: Create Patient form (react-hook-form → POST /api/patients).
 patients.js , PatientCreate.jsx , App.jsx
 
 Milestone 8: Edit Patient page (GET /:id + react-hook-form + PATCH /:id) and Delete.
-
+patients.js , PatientEdit.jsx , App.jsx , PatientsList.jsx , 
 
 Milestone 9: Client-side validation polish (nice errors, required fields).
 
