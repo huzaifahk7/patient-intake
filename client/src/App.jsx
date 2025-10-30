@@ -3,7 +3,7 @@ import { Link, Routes, Route } from "react-router-dom"; //Link → makes clickab
 import { http } from "./api/client";
 import PatientsList from "./PatientsList";
 import PatientCreate from "./PatientCreate";
-
+import PatientEdit from "./PatientEdit";
 
 function Health() {                                                                // Simple page that calls backend /health and shows JSON
   const [data, setData] = useState(null);                                         //setData is how we change it later.
@@ -54,6 +54,7 @@ export default function App() {
         <Route path="/" element={<Health />} />
         <Route path="/patients" element={<PatientsList />} />
         <Route path="/patients/new" element={<PatientCreate />} />
+        <Route path="/patients/:id/edit" element={<PatientEdit />} />
       </Routes>
     </div>
   );
