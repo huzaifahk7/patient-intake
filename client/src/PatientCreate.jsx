@@ -26,11 +26,7 @@ export default function PatientCreate() {
   });
   // 2) navigation helper (go back to /patients after success)
 
-  const payload = {
-    // react-hook-form gives age as string; convert to number or undefined
-    ...formData,
-    age: formData.age === "" ? undefined : Number(formData.age), //turns age from text → number (or undefined), then calls Patients.create(payload)
-  };
+  
 
   async function onSubmit(data) {
     try {

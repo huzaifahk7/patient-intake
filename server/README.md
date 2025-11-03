@@ -23,7 +23,7 @@ Milestone 8: Edit Patient page (GET /:id + react-hook-form + PATCH /:id) and Del
 patients.js , PatientEdit.jsx , App.jsx , PatientsList.jsx , 
 
 Milestone 9: Client-side validation polish (nice errors, required fields).
-
+patientSchema.js, Flash.jsx, PatientsList.jsx , PatientCreate.jsx , PatientEdit.jsx , 
 
 Milestone 10 (optional but recommended): UX polish (loading states, toasts), pagination/search on the backend & frontend.
 Milestone 11 (optional): Tests and deployment.

@@ -2,7 +2,7 @@
 
 import { Router } from 'express';
 import {
-    listPatients,
+    listPatientsPaged,
     createPatient,
     getPatient,
     updatePatient,
@@ -19,8 +19,9 @@ const r = Router();                                         //Creates a new rout
 // GET /api/patients
 r.get('/', async (req, res, next) => {                      //Registers a GET handler on this router’s root path ('/'), which becomes /api/patients after mounting in app.js.
     try {
-        const items = await listPatients();                 //Calls the model to fetch patients from Postgres and waits for the result.
-        res.json(items);                                    //Sends the fetched array back to the client as JSON, completing the request/response cycle
+        const { page, pageSize, q } = req.query;
+        const data = await listPatientsPaged({ page, pageSize, q });
+        res.json(data);
     } catch (err) {                                             //Catches any runtime or DB error
         next(err);                                          //Passes the error to Express’s global error handler instead of crashing 
     }

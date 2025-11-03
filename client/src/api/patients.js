@@ -3,19 +3,17 @@ import { http } from './client'
 
 // Patients.list() calls http('/patients') → which becomes a GET request to:http://localhost:4000/api/patients
 
-//Patients.list() calls your backend /api/patients and returns JSON.
 export const Patients = {
-    list: () => http('/patients'),                                   // list() hits GET /api/patients and returns a JSON array.
-    get: (id) => http(`/patients/${id}`),                           // get(id) hits GET /api/patients/:id and returns one JSON object.
-    create: (data) =>                                               //Patients.create(data) will send your form data to the backend’s POST /api/patients
-
-        http('/patients', { method: 'POST', body: JSON.stringify(data) }),
-
-    update: (id, data) =>                                           //sends a PATCH to change fields.
-
-        http(`/patients/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-
-    remove: (id) =>                                                 //sends a DELETE.
-
-        http(`/patients/${id}`, { method: 'DELETE' }),
+    // Accept params and build a query string
+    list: ({ page = 1, pageSize = 10, q = '' } = {}) => {
+        const u = new URLSearchParams()
+        u.set('page', String(page))
+        u.set('pageSize', String(pageSize))
+        if (q) u.set('q', q)
+        return http(`/patients?${u.toString()}`) // returns { items, total, page, pageSize }
+    },
+    get: (id) => http(`/patients/${id}`),
+    create: (data) => http('/patients', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id, d) => http(`/patients/${id}`, { method: 'PATCH', body: JSON.stringify(d) }),
+    remove: (id) => http(`/patients/${id}`, { method: 'DELETE' }),
 }

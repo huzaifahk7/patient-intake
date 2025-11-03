@@ -1,10 +1,7 @@
-//Model (patients.model.js) — SQL queries for one resource (“patients”).
+// server/src/models/patients.model.js
+import { query } from '../db.js';
 
-import { query } from '../db.js'; //Imports the shared query helper so this file can run parameterized SQL against your PostgreSQL pool.
-
-//Defines a reusable SELECT column list that converts snake_case DB columns into camelCase API fields so callers immediately get frontend-friendly keys.
-
-const COLUMNS = ` 
+const COLUMNS = `
   id,
   first_name   AS "firstName",
   last_name    AS "lastName",
@@ -15,81 +12,111 @@ const COLUMNS = `
   updated_at   AS "updatedAt"
 `;
 
+// --------- LIST (no pagination) - kept for compatibility ---------
 export async function listPatients() {
-    const { rows } = await query(`SELECT ${COLUMNS} FROM patients ORDER BY id DESC`); //Runs a parameterized SQL SELECT using shared query helper, waits for DB result, returns just the data rows
-    return rows;
+  const { rows } = await query(
+    `SELECT ${COLUMNS} FROM patients ORDER BY id DESC`
+  );
+  return rows;
 }
 
+// --------- LIST (pagination + search) ---------
+export async function listPatientsPaged({ page = 1, pageSize = 10, q = '' } = {}) {
+  page = Number(page);
+  pageSize = Number(pageSize);
+  if (!Number.isInteger(page) || page < 1) page = 1;
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) pageSize = 10;
+
+  const offset = (page - 1) * pageSize;
+
+  const hasQ = q && String(q).trim() !== '';
+  const where = hasQ
+    ? `WHERE first_name ILIKE $1 OR last_name ILIKE $1 OR phone_number ILIKE $1 OR health_issue ILIKE $1`
+    : '';
+  const params = hasQ ? [`%${q}%`] : [];
+
+  const countSql = `SELECT COUNT(*)::int AS total FROM patients ${where}`;
+  const { rows: countRows } = await query(countSql, params);
+  const total = countRows[0]?.total ?? 0;
+
+  const itemsSql = `
+    SELECT ${COLUMNS}
+    FROM patients
+    ${where}
+    ORDER BY id DESC
+    LIMIT ${pageSize} OFFSET ${offset}
+  `;
+  const { rows: items } = await query(itemsSql, params);
+
+  return { items, total, page, pageSize };
+}
+
+// --------- GET ONE ---------
+export async function getPatient(id) {
+  const { rows } = await query(
+    `SELECT ${COLUMNS} FROM patients WHERE id = $1`,
+    [id]
+  );
+  return rows[0] || null;
+}
+
+// --------- CREATE ---------
 export async function createPatient(p) {
-    const { rows } = await query(
-        `INSERT INTO PATIENTS (first_name, last_name, age, phone_number, health_issue)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING ${COLUMNS}`, //Uses parameterized placeholders $1…$5 (protects against SQL injection).
-        [
-            p.firstName, //Maps camelCase fields from the API to snake_case DB columns.
-            p.lastName,
-            p.age ?? null,
-            p.phoneNumber,
-            p.healthIssue ?? null,
-        ]
-    );
-    return rows[0]; //Returns the full inserted row
+  // Note: send null for optional fields if undefined
+  const { rows } = await query(
+    `
+    INSERT INTO patients (first_name, last_name, age, phone_number, health_issue)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING ${COLUMNS}
+    `,
+    [
+      p.firstName,
+      p.lastName,
+      p.age ?? null,
+      p.phoneNumber,
+      p.healthIssue ?? null,
+    ]
+  );
+  return rows[0];
 }
 
+// --------- UPDATE (partial) ---------
+export async function updatePatient(id, p) {
+  const map = {
+    firstName: 'first_name',
+    lastName: 'last_name',
+    age: 'age',
+    phoneNumber: 'phone_number',
+    healthIssue: 'health_issue',
+  };
 
+  const fields = [];
+  const values = [];
+  let i = 1;
 
-//-------> get, update, delete = Pure database helpers. They run SQL and return data. No HTTP stuff here <--------//
+  for (const [key, value] of Object.entries(p)) {
+    if (value === undefined) continue;
+    const col = map[key];
+    if (!col) continue;
+    fields.push(`${col} = $${i++}`);
+    values.push(value);
+  }
 
-export async function getPatient(id) {                      //Looks up one patient by id.
-    const { rows } = await query(
-        `SELECT ${COLUMNS} FROM patients WHERE id = $1`,    //Runs a parameterized SQL query ($1 prevents SQL injection)
-        [id]
-    );
-    return rows[0] || null;                                 //Return: a single object (or null if not found).
+  if (fields.length === 0) {
+    // nothing to update, return current row
+    return await getPatient(id);
+  }
+
+  values.push(id);
+  const { rows } = await query(
+    `UPDATE patients SET ${fields.join(', ')} WHERE id = $${i} RETURNING ${COLUMNS}`,
+    values
+  );
+  return rows[0] || null;
 }
 
-
-
-export async function updatePatient(id, p) {                //Updates only the fields you actually send (partial update =p)
-    const map = {
-        firstName: 'first_name',                            //maps API keys (camelCase) to DB columns (snake_case)
-        lastName: 'last_name',
-        age: 'age',
-        phoneNumber: 'phone_number',
-        healthIssue: 'health_issue',
-    };
-
-    const fields = [];                                      //Build a dynamic, safe SET clause only for provided fields
-    const values = [];
-    let i = 1;
-
-    for (const [key, value] of Object.entries(p)) {
-        if (value === undefined) continue;                  // skip untouched fields that are undefined.
-        const col = map[key];                               //Translate the API key to a DB column using map.- Skip unknown keys
-        if (!col) continue;                                 // ignore unknown keys AND only update columns we allow.
-        fields.push(`${col} = $${i++}`);                    //Add a SET part like first_name = $1 to fields.
-        values.push(value);                                 //Push the actual value (e.g., “Ada”) into values
-    }
-
-    if (fields.length === 0) {
-        // no changes requested; return current row
-        return await getPatient(id);
-    }
-
-    values.push(id);                                        // final parameter is the WHERE id and run a single SQL statement:
-    const { rows } = await query(
-        `UPDATE patients SET ${fields.join(', ')} WHERE id = $${i} RETURNING ${COLUMNS}`, //gives us the updated row in one go (no second SELECT needed)
-        values
-    );
-    return rows[0] || null;                                 //If no row matched the id, rows[0] will be undefined → function returns null 
-}
-
-
-
-export async function deletePatient(id) {                   //Runs a parameterized DELETE
-    const { rowCount } = await query(                       //rowCount tells us how many rows were affected. If 1, something was deleted; if 0, id didn’t exist.
-        `DELETE FROM patients WHERE id = $1`,
-        [id]
-    );
-    return rowCount > 0; // true if a row was deleted
+// --------- DELETE ---------
+export async function deletePatient(id) {
+  const { rowCount } = await query(`DELETE FROM patients WHERE id = $1`, [id]);
+  return rowCount > 0;
 }
