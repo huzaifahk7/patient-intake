@@ -26,4 +26,6 @@ Milestone 9: Client-side validation polish (nice errors, required fields).
 patientSchema.js, Flash.jsx, PatientsList.jsx , PatientCreate.jsx , PatientEdit.jsx , 
 
 Milestone 10 (optional but recommended): UX polish (loading states, toasts), pagination/search on the backend & frontend.
+patients.model.js , patients.routes.js , patients.js , PatientsList.jsx
+
 Milestone 11 (optional): Tests and deployment.

@@ -20,13 +20,12 @@ const r = Router();                                         //Creates a new rout
 r.get('/', async (req, res, next) => {                      //Registers a GET handler on this router’s root path ('/'), which becomes /api/patients after mounting in app.js.
     try {
         const { page, pageSize, q } = req.query;
-        const data = await listPatientsPaged({ page, pageSize, q });
+        const data = await listPatientsPaged({ page, pageSize, q }); // Ask model for paged results
         res.json(data);
     } catch (err) {                                             //Catches any runtime or DB error
         next(err);                                          //Passes the error to Express’s global error handler instead of crashing 
     }
 });
-
 
 r.post('/', async (req, res, next) => {
     try {
