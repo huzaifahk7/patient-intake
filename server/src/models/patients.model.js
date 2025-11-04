@@ -1,7 +1,7 @@
 // server/src/models/patients.model.js
 import { query } from '../db.js';                 // Reuse our pooled Postgres "query" helper
-
-const COLUMNS = `                                // Column list with snake_case → camelCase aliases for consistent API output
+// // Column list with snake_case → camelCase aliases for consistent API output
+const COLUMNS = `                              
   id,
   first_name   AS "firstName",
   last_name    AS "lastName",

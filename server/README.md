@@ -29,3 +29,9 @@ Milestone 10 (optional but recommended): UX polish (loading states, toasts), pag
 patients.model.js , patients.routes.js , patients.js , PatientsList.jsx
 
 Milestone 11 (optional): Tests and deployment.
+
+
+
+I built a full-stack Patient Intake app with React on the frontend, Express/Node on the backend, and PostgreSQL as the database. 
+It supports full CRUD, client/server validation, and simple pagination & search. 
+I can trace any request end-to-end—from a button click in React, to a parameterized SQL statement in Postgres

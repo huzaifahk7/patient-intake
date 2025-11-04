@@ -187,7 +187,7 @@ export default function PatientsList() {
                       onClick={() => handleDelete(p.id)}  // Delete action
                       disabled={deletingId === p.id}      // Disable if this row is being deleted
                     >
-                      {deletingId === p.id ? "Deleting…" : "Delete"} // Inline progress label
+                      {deletingId === p.id ? "Deleting…" : "Delete"} 
                     </button>
                   </td>
                 </tr>
