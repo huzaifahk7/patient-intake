@@ -1,4 +1,5 @@
-/**
+/** Patient Intake is a small full-stack CRUD app. Patients can be created, read, updated, and deleted. The stack is React + 
+ react-hook-form on the frontend, Node/Express on the backend, and PostgreSQL for storage.
  * app.js — Creates the Express app, installs middleware, and mounts routes.
  *
  * How it fits together:
@@ -31,17 +32,16 @@ app.use(cors({ origin: '*' }))  // Allow requests from any origin (OK for learni
 app.use(express.json())         // Parse JSON request bodies into req.body
 app.use(morgan('dev'))          // Log each request to the console (method, path, status, response time)
 
-// -----------------------
+
 // Health check routes
-// -----------------------
+
 // A tiny endpoint to confirm the server is up. Useful for frontend "Hello API" tests and deployment health checks.
 app.get('/health', (req, res) => {
   res.json({ ok: true, time: new Date().toISOString() })
 })
 
-// -----------------------
 // Application routes
-// -----------------------
+
 // Mount the patients router under /api/patients, e.g.:
 //   GET    /api/patients
 //   POST   /api/patients

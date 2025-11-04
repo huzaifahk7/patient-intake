@@ -1,27 +1,33 @@
-// client/src/PatientEdit.jsx
-// Purpose: Load one patient into a form, let the user edit, and PATCH the changes.
-// Data flow: read :id from URL → GET one → reset form → user edits → PATCH → navigate back with a flash.
+// PatientEdit.jsx
+// Purpose: Load an existing patient into a form, allow edits, and PATCH the changes.
+// Now uses FormField/Input/Textarea/Button to remove repeated label+error markup.
 
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form"; // Form state/validation handler
-import { zodResolver } from "@hookform/resolvers/zod"; // Connect react-hook-form to Zod rules
-import { patientUpdateSchema } from "./validation/patientSchema"; // Frontend validation rules (partial)
-import { useParams, useNavigate, Link } from "react-router-dom"; // Read URL params + navigate + link
-import { Patients } from "./api/patients"; // API wrapper
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { patientUpdateSchema } from "./validation/patientSchema";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { Patients } from "./api/patients";
+
+// Reusable form atoms
+import FormField from "./components/common/FormField";
+import Input from "./components/common/Input";
+import Textarea from "./components/common/Textarea";
+import Button from "./components/common/Button";
 
 export default function PatientEdit() {
-  const { id } = useParams(); // URL param (string). Backend expects a number; model handles it.
+  const { id } = useParams(); // /patients/:id/edit → read id
   const navigate = useNavigate();
 
-  // Set up the form with empty defaults; we'll fill them after fetching the patient.
+  // Setup react-hook-form with Zod validation and empty defaults (we’ll fill via reset)
   const {
     register,
-    handleSubmit, // wraps your onSubmit and gives you validated values
-    reset, // programmatically set form values (after GET)
+    handleSubmit,
+    reset,
     formState: { errors, isSubmitting, isValid },
   } = useForm({
-    mode: "onBlur", // validate when a field loses focus (friendly UX)
-    resolver: zodResolver(patientUpdateSchema), // run Zod rules automatically
+    mode: "onBlur",
+    resolver: zodResolver(patientUpdateSchema), // every field optional (partial update)
     defaultValues: {
       firstName: "",
       lastName: "",
@@ -31,15 +37,14 @@ export default function PatientEdit() {
     },
   });
 
-  // Local fetch status
+  // Local status while loading the row
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
 
-  // On first render: fetch the row and prefill the form.
+  // On mount: GET one patient and prefill the form
   useEffect(() => {
-    Patients.get(id) // GET /api/patients/:id
+    Patients.get(id)
       .then((p) => {
-        // react-hook-form prefers strings for text/number inputs
         reset({
           firstName: p.firstName ?? "",
           lastName: p.lastName ?? "",
@@ -52,14 +57,14 @@ export default function PatientEdit() {
       .finally(() => setLoading(false));
   }, [id, reset]);
 
-  // Submit handler: convert age (string→number or undefined), then PATCH.
+  // Submit handler: convert age string → number (or omit), then PATCH
   async function onSubmit(formData) {
     const payload = {
       ...formData,
       age: formData.age === "" ? undefined : Number(formData.age),
     };
     try {
-      await Patients.update(id, payload); // PATCH /api/patients/:id
+      await Patients.update(id, payload);
       navigate("/patients", {
         state: { flash: "Patient updated successfully." },
       });
@@ -68,11 +73,9 @@ export default function PatientEdit() {
     }
   }
 
-  // Render status
   if (loading) return <p>Loading patient…</p>;
   if (loadError) return <p style={{ color: "red" }}>Error: {loadError}</p>;
 
-  // Form UI
   return (
     <div style={{ maxWidth: 640 }}>
       <h2>Edit Patient (ID: {id})</h2>
@@ -85,76 +88,54 @@ export default function PatientEdit() {
         style={{ marginTop: 16, display: "grid", gap: 12 }}
       >
         {/* First Name */}
-        <label>
-          First Name
-          <br />
-          <input
+        <FormField label="First Name" error={errors.firstName?.message}>
+          <Input
             {...register("firstName")}
             placeholder="e.g., Ada"
             aria-invalid={!!errors.firstName}
           />
-        </label>
-        {errors.firstName && (
-          <span style={{ color: "red" }}>{errors.firstName.message}</span>
-        )}
+        </FormField>
 
         {/* Last Name */}
-        <label>
-          Last Name
-          <br />
-          <input
+        <FormField label="Last Name" error={errors.lastName?.message}>
+          <Input
             {...register("lastName")}
             placeholder="e.g., Lovelace"
             aria-invalid={!!errors.lastName}
           />
-        </label>
-        {errors.lastName && (
-          <span style={{ color: "red" }}>{errors.lastName.message}</span>
-        )}
+        </FormField>
 
         {/* Age */}
-        <label>
-          Age (optional)
-          <br />
-          <input
+        <FormField label="Age (optional)" error={errors.age?.message}>
+          <Input
             type="number"
             {...register("age")}
             placeholder="e.g., 36"
             aria-invalid={!!errors.age}
           />
-        </label>
-        {errors.age && (
-          <span style={{ color: "red" }}>{errors.age.message}</span>
-        )}
+        </FormField>
 
         {/* Phone */}
-        <label>
-          Phone Number
-          <br />
-          <input
+        <FormField label="Phone Number" error={errors.phoneNumber?.message}>
+          <Input
             {...register("phoneNumber")}
             placeholder="+1 555 123 4567"
             aria-invalid={!!errors.phoneNumber}
           />
-        </label>
-        {errors.phoneNumber && (
-          <span style={{ color: "red" }}>{errors.phoneNumber.message}</span>
-        )}
+        </FormField>
 
         {/* Health Issue */}
-        <label>
-          Health Issue (optional)
-          <br />
-          <textarea
+        <FormField label="Health Issue (optional)">
+          <Textarea
             rows="4"
             {...register("healthIssue")}
             placeholder="Short note"
           />
-        </label>
+        </FormField>
 
-        <button type="submit" disabled={isSubmitting || !isValid}>
+        <Button type="submit" disabled={isSubmitting || !isValid}>
           {isSubmitting ? "Updating…" : "Save Changes"}
-        </button>
+        </Button>
       </form>
     </div>
   );

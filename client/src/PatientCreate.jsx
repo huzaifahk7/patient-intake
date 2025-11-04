@@ -1,25 +1,29 @@
-// client/src/PatientCreate.jsx
-// Purpose: Create a new patient with client-side validation.
-// Flow: user fills form → Zod validates → POST /api/patients → navigate back with a flash.
+// PatientCreate.jsx
+// Purpose: Create a new patient using the same reusable form atoms as Edit.
 
-import { useForm } from "react-hook-form"; // Form state/validation controller
-import { useNavigate, Link } from "react-router-dom"; // Navigate on success; link back to list
-import { Patients } from "./api/patients"; // Patients API
-import { zodResolver } from "@hookform/resolvers/zod"; // Connect react-hook-form and Zod
-import { patientCreateSchema } from "./validation/patientSchema"; // Frontend validation rules
+import { useForm } from "react-hook-form";
+import { useNavigate, Link } from "react-router-dom";
+import { Patients } from "./api/patients";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { patientCreateSchema } from "./validation/patientSchema";
+
+// Reusable form atoms
+import FormField from "./components/common/FormField";
+import Input from "./components/common/Input";
+import Textarea from "./components/common/Textarea";
+import Button from "./components/common/Button";
 
 export default function PatientCreate() {
   const navigate = useNavigate();
 
-  // Set up controlled form with defaults + validation
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting, isValid },
     reset,
   } = useForm({
-    mode: "onBlur", // validate each field when it loses focus
-    resolver: zodResolver(patientCreateSchema), // run Zod schema automatically
+    mode: "onBlur",
+    resolver: zodResolver(patientCreateSchema),
     defaultValues: {
       firstName: "",
       lastName: "",
@@ -29,11 +33,15 @@ export default function PatientCreate() {
     },
   });
 
-  // Submit handler (POST)
   async function onSubmit(data) {
+    // react-hook-form gives age as string for number inputs; convert only if not empty
+    const payload = {
+      ...data,
+      age: data.age === "" ? undefined : Number(data.age),
+    };
     try {
-      await Patients.create(data); // POST /api/patients
-      reset(); // Clear the form after success
+      await Patients.create(payload);
+      reset();
       navigate("/patients", {
         state: { flash: "Patient created successfully." },
       });
@@ -42,7 +50,6 @@ export default function PatientCreate() {
     }
   }
 
-  // UI
   return (
     <div style={{ maxWidth: 640 }}>
       <h2>New Patient</h2>
@@ -55,76 +62,54 @@ export default function PatientCreate() {
         style={{ marginTop: 16, display: "grid", gap: 12 }}
       >
         {/* First Name */}
-        <label>
-          First Name
-          <br />
-          <input
+        <FormField label="First Name" error={errors.firstName?.message}>
+          <Input
             {...register("firstName")}
             placeholder="e.g., Grace"
             aria-invalid={!!errors.firstName}
           />
-        </label>
-        {errors.firstName && (
-          <span style={{ color: "red" }}>{errors.firstName.message}</span>
-        )}
+        </FormField>
 
         {/* Last Name */}
-        <label>
-          Last Name
-          <br />
-          <input
+        <FormField label="Last Name" error={errors.lastName?.message}>
+          <Input
             {...register("lastName")}
             placeholder="e.g., Hopper"
             aria-invalid={!!errors.lastName}
           />
-        </label>
-        {errors.lastName && (
-          <span style={{ color: "red" }}>{errors.lastName.message}</span>
-        )}
+        </FormField>
 
         {/* Age */}
-        <label>
-          Age (optional)
-          <br />
-          <input
+        <FormField label="Age (optional)" error={errors.age?.message}>
+          <Input
             type="number"
             {...register("age")}
             placeholder="e.g., 85"
             aria-invalid={!!errors.age}
           />
-        </label>
-        {errors.age && (
-          <span style={{ color: "red" }}>{errors.age.message}</span>
-        )}
+        </FormField>
 
         {/* Phone */}
-        <label>
-          Phone Number
-          <br />
-          <input
+        <FormField label="Phone Number" error={errors.phoneNumber?.message}>
+          <Input
             {...register("phoneNumber")}
             placeholder="+1 555 222 3333"
             aria-invalid={!!errors.phoneNumber}
           />
-        </label>
-        {errors.phoneNumber && (
-          <span style={{ color: "red" }}>{errors.phoneNumber.message}</span>
-        )}
+        </FormField>
 
         {/* Health Issue */}
-        <label>
-          Health Issue (optional)
-          <br />
-          <textarea
+        <FormField label="Health Issue (optional)">
+          <Textarea
             rows="4"
             {...register("healthIssue")}
             placeholder="Short note"
           />
-        </label>
+        </FormField>
 
-        <button type="submit" disabled={isSubmitting || !isValid}>
+        <Button type="submit" disabled={isSubmitting || !isValid}>
           {isSubmitting ? "Creating…" : "Create Patient"}
-        </button>
+        </Button>
       </form>
     </div>
   );

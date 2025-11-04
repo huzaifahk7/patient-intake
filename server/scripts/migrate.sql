@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS patients (
     age          INTEGER CHECK (age >= 0), -- Optional; if present must be 0 or more
     phone_number TEXT NOT NULL,            -- Phone number (validated by a separate CHECK constraint below)
     health_issue TEXT,                     -- Short description / note of the health issue
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(), -- Row creation time (UTC)
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(), -- Row creation time (UTC) Accepts input with or without a time zone
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()  -- Row last update time (UTC)
 );
 

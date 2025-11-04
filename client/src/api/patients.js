@@ -1,4 +1,3 @@
-// client/src/api/patients.js
 // Purpose: A tiny wrapper specific to "patients" endpoints.
 // All components use these functions instead of calling fetch() directly.
 

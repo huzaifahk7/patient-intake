@@ -1,38 +1,46 @@
-// client/src/PatientsList.jsx
+// PatientsList.jsx
 // Purpose: Show a paginated, searchable table of patients with Edit/Delete actions.
-// Data flow: UI state → Patients.list({ page, pageSize, q }) → render table.
+// Now uses reusable UI atoms: Input, Button, Loading, ErrorBlock, Pagination, ConfirmButton.
 
-import { useEffect, useMemo, useState } from "react"; // React state/effects/memo tools
-import { useLocation, Link } from "react-router-dom"; // Read flash message, build links to pages
-import { Patients } from "./api/patients"; // Patients API wrapper
-import Flash from "./components/Flash"; // Small green success box
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, Link } from "react-router-dom";
+import { Patients } from "./api/patients";
+
+// Reusable UI components (your new common atoms)
+import Input from "./components/common/Input";
+import Button from "./components/common/Button";
+import Loading from "./components/common/Loading";
+import ErrorBlock from "./components/common/ErrorBlock";
+import Pagination from "./components/common/Pagination";
+import ConfirmButton from "./components/common/ConfirmButton";
+import Flash from "./components/Flash"; // your existing flash box (you can also move it under components/common)
 
 export default function PatientsList() {
-  // Read optional "flash" message (e.g., "Created!" from Create/Edit page)
+  // Read optional flash message (e.g., “Created successfully”) passed via navigation state
   const location = useLocation();
   const flash = location.state?.flash || null;
 
-  // ------- Table & controls state -------
-  const [items, setItems] = useState([]); // Current page of rows
-  const [total, setTotal] = useState(0); // Total matching rows for pagination
-  const [page, setPage] = useState(1); // Current page (1-based)
+  // ------ Table state ------
+  const [items, setItems] = useState([]); // Current rows
+  const [total, setTotal] = useState(0); // Total matches (for pagination)
+  const [page, setPage] = useState(1); // Current page number
   const [pageSize, setPageSize] = useState(10); // Rows per page
   const [q, setQ] = useState(""); // Search text
 
-  // ------- Status flags -------
-  const [loading, setLoading] = useState(true); // Show "Loading…" while fetching
-  const [error, setError] = useState(null); // Error text if API call fails
-  const [deletingId, setDeletingId] = useState(null); // Row currently being deleted
+  // ------ Status flags ------
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [deletingId, setDeletingId] = useState(null); // disable a row’s delete button while in-flight
 
-  // Core fetcher: pulls data from server based on page/pageSize/q
+  // Core loader: fetch page of rows from the server
   function load() {
     setLoading(true);
     setError(null);
     Patients.list({ page, pageSize, q })
       .then(({ items, total, page, pageSize }) => {
+        // Keep local state in sync with server (server clamps invalid inputs)
         setItems(items);
         setTotal(total);
-        // Keep page/pageSize in sync with server (server may clamp invalid values)
         setPage(page);
         setPageSize(pageSize);
       })
@@ -40,13 +48,13 @@ export default function PatientsList() {
       .finally(() => setLoading(false));
   }
 
-  // Fetch whenever page/pageSize/q change (and once on mount)
+  // Load when page/pageSize/q change (and on first render)
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize, q]);
 
-  // Compute pagination info for "Showing X–Y of Z" and page count
+  // Compute pagination helpers for “Showing X–Y of Z” and button disabling
   const pageCount = useMemo(
     () => Math.max(1, Math.ceil(total / pageSize)),
     [total, pageSize]
@@ -54,15 +62,12 @@ export default function PatientsList() {
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const end = Math.min(total, page * pageSize);
 
-  // Delete one row (with confirm). Option: reload list to keep counts correct.
+  // Delete a row with confirm (reload for accurate counts)
   async function handleDelete(id) {
-    const yes = window.confirm(`Delete patient #${id}? This cannot be undone.`);
-    if (!yes) return;
     try {
       setDeletingId(id);
       await Patients.remove(id);
-      load(); // refresh table and counts
-      // Alternative: setItems(prev => prev.filter(p => p.id !== id)); setTotal(t => t - 1)
+      load();
     } catch (e) {
       alert(`Delete failed: ${e.message}`);
     } finally {
@@ -70,13 +75,13 @@ export default function PatientsList() {
     }
   }
 
-  // Start a new search: update q and jump back to page 1
+  // When user types in search, update q and jump to page 1
   function onSearchChange(e) {
     setQ(e.target.value);
     setPage(1);
   }
 
-  // Change page size: update value and jump back to page 1
+  // When user changes page size, update and jump to page 1 to avoid empties
   function onPageSizeChange(e) {
     setPageSize(Number(e.target.value));
     setPage(1);
@@ -84,7 +89,7 @@ export default function PatientsList() {
 
   return (
     <div>
-      {/* Header bar */}
+      {/* Header row: title on the left, +New link on the right */}
       <div
         style={{
           display: "flex",
@@ -96,10 +101,10 @@ export default function PatientsList() {
         <Link to="/patients/new">+ New</Link>
       </div>
 
-      {/* Success flash message (e.g., after create/update) */}
+      {/* Optional green success message (e.g., after create/edit) */}
       <Flash message={flash} />
 
-      {/* Controls: search, page size, pager */}
+      {/* Controls row: search box, page size selector, and pager */}
       <div
         style={{
           display: "flex",
@@ -108,13 +113,20 @@ export default function PatientsList() {
           margin: "12px 0",
         }}
       >
-        <input
+        {/* Search input (controlled) */}
+        <Input
           value={q}
           onChange={onSearchChange}
           placeholder="Search name, phone, issue…"
           aria-label="Search patients"
+          style={{ maxWidth: 300 }}
         />
-        <label>
+        {/* You can keep this button if you want an explicit “Search” action; not required for live search */}
+        <Button variant="ghost" onClick={() => setPage(1)}>
+          Search
+        </Button>
+
+        <label style={{ marginLeft: 8 }}>
           Page size:{" "}
           <select value={pageSize} onChange={onPageSizeChange}>
             <option value={5}>5</option>
@@ -122,34 +134,22 @@ export default function PatientsList() {
             <option value={25}>25</option>
           </select>
         </label>
+
+        {/* Pager pushed to the right */}
         <div style={{ marginLeft: "auto" }}>
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1}
-          >
-            Prev
-          </button>
-          <span style={{ margin: "0 8px" }}>
-            Page {page} of {pageCount}
-          </span>
-          <button
-            onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-            disabled={page >= pageCount}
-          >
-            Next
-          </button>
+          <Pagination
+            page={page}
+            pageCount={pageCount}
+            onPrev={() => setPage((p) => Math.max(1, p - 1))}
+            onNext={() => setPage((p) => Math.min(pageCount, p + 1))}
+          />
         </div>
       </div>
 
-      {/* Status: loading / error / empty / table */}
-      {loading && <p>Loading patients…</p>}
+      {/* Status blocks */}
+      {loading && <Loading text="Loading patients…" />}
 
-      {error && (
-        <div style={{ color: "red", marginTop: 8 }}>
-          <p>Error: {error}</p>
-          <button onClick={load}>Retry</button>
-        </div>
-      )}
+      {error && <ErrorBlock message={error} onRetry={load} />}
 
       {!loading && !error && total === 0 && (
         <p style={{ marginTop: 8 }}>
@@ -157,12 +157,14 @@ export default function PatientsList() {
         </p>
       )}
 
+      {/* Table */}
       {!loading && !error && total > 0 && (
         <>
           <p style={{ margin: "4px 0" }}>
             Showing <strong>{start}</strong>–<strong>{end}</strong> of{" "}
             <strong>{total}</strong>
           </p>
+
           <table
             border="1"
             cellPadding="6"
@@ -193,12 +195,15 @@ export default function PatientsList() {
                     >
                       Edit
                     </Link>
-                    <button
-                      onClick={() => handleDelete(p.id)}
+
+                    {/* ConfirmButton wraps window.confirm() so you don’t repeat that code */}
+                    <ConfirmButton
+                      confirmText={`Delete patient #${p.id}? This cannot be undone.`}
+                      onConfirm={() => handleDelete(p.id)}
                       disabled={deletingId === p.id}
                     >
                       {deletingId === p.id ? "Deleting…" : "Delete"}
-                    </button>
+                    </ConfirmButton>
                   </td>
                 </tr>
               ))}
