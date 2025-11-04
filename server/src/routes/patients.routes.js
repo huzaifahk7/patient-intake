@@ -1,89 +1,99 @@
-// Routes (patients.routes.js) — HTTP endpoints (what URLs exist and what they do).
+// patients.routes.js
+// Purpose: Define HTTP endpoints for "patients". Each route validates input (Zod) and delegates
+//          database work to the model functions. Returns clean JSON responses for the frontend.
 
-import { Router } from 'express';
+import { Router } from 'express'
 import {
     listPatientsPaged,
     createPatient,
     getPatient,
     updatePatient,
     deletePatient,
-} from '../models/patients.model.js';
+} from '../models/patients.model.js'
 import {
     patientCreateSchema,
-    patientUpdateSchema,                                    //a Zod schema where every field is optional (.partial()), perfect for PATCH (partial updates).
-} from '../schemas/patient.schema.js';
+    patientUpdateSchema, // same rules as createSchema, but every field optional (for PATCH)
+} from '../schemas/patient.schema.js'
 
+const r = Router() // A standalone mini-app for /api/patients routes
 
-const r = Router();                                         //Creates a new router instance r that will hold all patient-related HTTP routes.
-
-// GET /api/patients
-r.get('/', async (req, res, next) => {                      //Registers a GET handler on this router’s root path ('/'), which becomes /api/patients after mounting in app.js.
+// GET /api/patients?page=1&pageSize=10&q=term
+// Lists patients with pagination and optional search.
+r.get('/', async (req, res, next) => {
     try {
-        const { page, pageSize, q } = req.query;
-        const data = await listPatientsPaged({ page, pageSize, q }); // Ask model for paged results
-        res.json(data);
-    } catch (err) {                                             //Catches any runtime or DB error
-        next(err);                                          //Passes the error to Express’s global error handler instead of crashing 
+        const { page, pageSize, q } = req.query
+        const data = await listPatientsPaged({ page, pageSize, q })
+        res.json(data) // { items, total, page, pageSize }
+    } catch (err) {
+        next(err) // Pass unexpected errors to Express' global handler
     }
-});
+})
 
+// POST /api/patients
+// Create a new patient. Validates the request body before inserting.
 r.post('/', async (req, res, next) => {
     try {
-        const data = patientCreateSchema.parse(req.body);       // 1) Validate the body against our schema
-        const created = await createPatient(data);              // 2) Insert into DB
-        res.status(201).json(created);                          // 3) Respond with 201 Created and the new row
+        const data = patientCreateSchema.parse(req.body) // throws if invalid
+        const created = await createPatient(data)
+        res.status(201).json(created) // 201 Created + new row
     } catch (err) {
-
-        if (err?.issues) {                                      // If it's a Zod validation error, return 400 with details
-            return res.status(400).json({ error: 'ValidationError', details: err.issues });
+        // If Zod threw a validation error, return a clear 400 with details.
+        if (err?.issues) {
+            return res.status(400).json({ error: 'ValidationError', details: err.issues })
         }
-        next(err);
+        next(err)
     }
-});
-
-
-//-----------------------> model functions that run the actual SQL. Routes never write SQL; they delegate to models.<------------------------------//
+})
 
 // GET /api/patients/:id
-r.get('/:id', async (req, res, next) => {                        //We define a GET route that expects an id in the URL
+// Read a single patient by id.
+r.get('/:id', async (req, res, next) => {
     try {
-        const id = Number(req.params.id);                        //URL params are strings; we convert to a number for the DB.
-        const item = await getPatient(id);                      //Ask the model to fetch that row from Postgres
-        if (!item) return res.status(404).json({ error: 'NotFound' }); //If it doesn’t exist, send 404 Not Found.
-        res.json(item);                                         //On success, send the one patient as JSON with default 200 OK.
-    } catch (err) {                                             //Pass unexpected errors to Express’ error handler
-        next(err);
+        const id = Number(req.params.id) // URL params are strings → convert to number
+        const item = await getPatient(id)
+        if (!item) return res.status(404).json({ error: 'NotFound' })
+        res.json(item)
+    } catch (err) {
+        next(err)
     }
-});
+})
 
 // PATCH /api/patients/:id
-r.patch('/:id', async (req, res, next) => {                      //PATCH means “change only the fields I send.
+// Partially update a patient. Only fields sent in the body are changed.
+r.patch('/:id', async (req, res, next) => {
     try {
-        const id = Number(req.params.id);                       //URL params are strings; we convert to a number for the DB.
-        const data = patientUpdateSchema.parse(req.body);       // Validate the incoming body.
-        const updated = await updatePatient(id, data);          //Ask the model to do a parameterized SQL update for just the provided fields.
-        if (!updated) return res.status(404).json({ error: 'NotFound' }); //If no such id, it’s a 404 (consistent with GET).
-        res.json(updated);                                      //return updated row (200).
-    } catch (err) {                                             //If anything throws an error, execution jumps here with the error in err
-        if (err?.issues) {                                      //if err.issues exists, we know this is a validation error, not a server crash.
-            return res                                          //Bad Request
-                .status(400)
-                .json({ error: 'ValidationError', details: err.issues });
+        const id = Number(req.params.id)
+        const data = patientUpdateSchema.parse(req.body) // every field optional
+        const updated = await updatePatient(id, data)
+        if (!updated) return res.status(404).json({ error: 'NotFound' })
+        res.json(updated)
+    } catch (err) {
+        if (err?.issues) {
+            return res.status(400).json({ error: 'ValidationError', details: err.issues })
         }
-        next(err);                                              //If it wasn’t a validation error, pass the error to Express’s global error handler.
+        next(err)
     }
-});
+})
 
 // DELETE /api/patients/:id
-r.delete('/:id', async (req, res, next) => {                    //We define a delete route by id.
+// Delete a patient. Returns 204 on success, 404 if not found.
+r.delete('/:id', async (req, res, next) => {
     try {
-        const id = Number(req.params.id);                       //URL params are strings; we convert to a number for the DB.
-        const ok = await deletePatient(id);                     //Model returns true if a row was deleted, false if the id didn’t exist.
-        if (!ok) return res.status(404).json({ error: 'NotFound' }); //Deleting a missing thing is a 404 (resource not found)
-        res.status(204).send(); // No Content on success
+        const id = Number(req.params.id)
+        const ok = await deletePatient(id)
+        if (!ok) return res.status(404).json({ error: 'NotFound' })
+        res.status(204).send() // 204 No Content
     } catch (err) {
-        next(err);
+        next(err)
     }
-});
+})
 
 export default r
+
+/*
+Flow summary:
+- Router parses the request (params/body/query).
+- Zod (schemas) validates data for POST/PATCH; if invalid → 400 with details.
+- Model functions run parameterized SQL and return rows.
+- Responses are clean JSON: either a resource (200/201), nothing (204), or a clear error (404/400).
+*/

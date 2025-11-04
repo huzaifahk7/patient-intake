@@ -28,7 +28,6 @@ patientSchema.js, Flash.jsx, PatientsList.jsx , PatientCreate.jsx , PatientEdit.
 Milestone 10 (optional but recommended): UX polish (loading states, toasts), pagination/search on the backend & frontend.
 patients.model.js , patients.routes.js , patients.js , PatientsList.jsx
 
-Milestone 11 (optional): Tests and deployment.
 
 
 

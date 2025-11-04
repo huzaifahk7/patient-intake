@@ -1,29 +1,33 @@
+-- migrate.sql — Creates/updates database schema for this project.
+-- Safe to run multiple times. It checks existence before creating constraints/triggers.
+
+-- 1) Table definition
 CREATE TABLE IF NOT EXISTS patients (
-    id SERIAL PRIMARY KEY,
-    first_name TEXT NOT NULL,
-    last_name TEXT NOT NULL,
-    age INTEGER CHECK (age >= 0),
-    phone_number TEXT NOT NULL,
-    health_issue TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    id SERIAL PRIMARY KEY,                 -- Unique numeric ID (auto-increment)
+    first_name   TEXT NOT NULL,            -- Patient's first name (required)
+    last_name    TEXT NOT NULL,            -- Patient's last name  (required)
+    age          INTEGER CHECK (age >= 0), -- Optional; if present must be 0 or more
+    phone_number TEXT NOT NULL,            -- Phone number (validated by a separate CHECK constraint below)
+    health_issue TEXT,                     -- Short description / note of the health issue
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(), -- Row creation time (UTC)
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()  -- Row last update time (UTC)
 );
 
-/* Make a table named patients if it doesn’t already exist. Each row is one patient. */
-
+-- 2) Phone number format constraint (only create if not already added)
+-- This uses a small PL/pgSQL block (DO $$ ... $$) to check Postgres' system catalog for a named constraint.
 DO $$
 BEGIN 
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'phone_digits'
     ) THEN
       ALTER TABLE patients
-        ADD CONSTRAINT phone_digits CHECK (phone_number ~ '^[0-9+\\-() ]{7,20}$');
+        ADD CONSTRAINT phone_digits
+        CHECK (phone_number ~ '^[0-9+\-() ]{7,20}$'); -- 7–20 chars; digits/spaces/+/-/() allowed
     END IF;
 END$$;
 
-/* Run a tiny program (a PL/pgSQL block) that says: “if the phone_digits rule doesn’t already exist, add it.”
-The rule (CHECK) says the phone number must look like 7–20 characters made of digits, spaces, plus +, minus -, and parentheses.*/
-
+-- 3) Trigger to auto-update updated_at on changes
+-- Define a function that sets NEW.updated_at = now() before an UPDATE is saved.
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -31,35 +35,25 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-/*Define a tiny function that, right before a row is updated, sets the row’s updated_at to the current time. */
 
-
+-- Ensure the trigger exists (drop first if present to avoid duplicates)
 DROP TRIGGER IF EXISTS patients_set_updated_at ON patients;
 CREATE TRIGGER patients_set_updated_at
     BEFORE UPDATE ON patients
-    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-    
-/*First remove any old trigger with that name (if it exists), then create a trigger on the patients table that runs before every update and calls our function to refresh updated_at. */
+    FOR EACH ROW
+    EXECUTE FUNCTION set_updated_at();
 
+/*
+How this connects to the app:
+- The Express routes and models insert/update rows in "patients".
+- The CHECK constraints enforce rules at the DB level (extra safety beyond API validation).
+- The trigger keeps "updated_at" accurate without the app having to manage it manually.
+- "created_at" and "updated_at" are returned to the API and can be shown in the UI if desired.
 
-
-
-
-
-
-
-/*  
-SQL files (migrate.sql, seed.sql) — define and fill the database.
-
-IF NOT EXISTS:  only create it if it’s missing—safe to run multiple times.
-
-NOT NULL:       value must be present.
-
-CHECK:          validation rule enforced by the database. 
-
-DO $$ ... $$ →  a throwaway code block executed once.
-
-pg_constraint → Postgres’ internal table that lists all constraints; we’re checking by name.
-
-^/$ → start/end anchors (match the whole string)
+Cheat sheet:
+- IF NOT EXISTS: safe to run again (idempotent).
+- CHECK: database-enforced validation rule.
+- DO $$ ... $$: one-off block of procedural code in Postgres.
+- pg_constraint: Postgres system catalog listing constraints by name.
+- ^ and $ in the regex anchor the start/end (match the entire phone string).
 */

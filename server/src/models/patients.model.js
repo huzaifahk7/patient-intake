@@ -1,7 +1,11 @@
-// server/src/models/patients.model.js
-import { query } from '../db.js';                 // Reuse our pooled Postgres "query" helper
-// // Column list with snake_case → camelCase aliases for consistent API output
-const COLUMNS = `                              
+// patients.model.js
+// Purpose: All database operations (SQL) for the "patients" resource live here.
+// Routes call these functions; each function uses the shared query() helper to talk to Postgres.
+
+import { query } from '../db.js' // Uses the pooled Postgres client (single doorway to the DB)
+
+// A reusable SELECT list. We alias snake_case DB columns → camelCase JSON keys for consistent API output.
+const COLUMNS = `
   id,
   first_name   AS "firstName",
   last_name    AS "lastName",
@@ -12,113 +16,128 @@ const COLUMNS = `
   updated_at   AS "updatedAt"
 `;
 
-// --------- LIST (no pagination) - kept for compatibility ---------
-export async function listPatients() {            // Old list: returns ALL rows (kept so nothing else breaks)
-  const { rows } = await query(                   //send a SQL command (a string) to the PostgreSQL database, and Postgres returns results
-    `SELECT ${COLUMNS} FROM patients ORDER BY id DESC` // Latest first
-  );
-  return rows;                                    // Return array of rows
+// ---------- LIST (legacy: no pagination) ----------
+// Returns ALL rows (latest first). Kept for compatibility if any code still needs it.
+export async function listPatients() {
+  const { rows } = await query(
+    `SELECT ${COLUMNS} FROM patients ORDER BY id DESC`
+  )
+  return rows
 }
 
-// --------- LIST (pagination + search) ---------If a number is out of acceptable range or not a proper integer, we force (clamp) it to a safe value.
+// ---------- LIST (with pagination + search) ----------
+// Returns a specific page of results and supports a simple text search across several columns.
 export async function listPatientsPaged({ page = 1, pageSize = 10, q = '' } = {}) {
-  page = Number(page);                            // Ensure "page" is a number
-  pageSize = Number(pageSize);                    // Ensure "pageSize" is a number
-  if (!Number.isInteger(page) || page < 1) page = 1;   // Clamp invalid page to 1
-  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) pageSize = 10; // Clamp invalid size to 10..100
+  // Normalize and clamp inputs to safe ranges.
+  page = Number(page)
+  pageSize = Number(pageSize)
+  if (!Number.isInteger(page) || page < 1) page = 1
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) pageSize = 10
 
-  const offset = (page - 1) * pageSize;          // Compute OFFSET for LIMIT/OFFSET pagination- LIMIT = how many rows per page, OFFSET = how many rows to skip
+  // OFFSET = how many rows to skip; LIMIT = how many rows to return.
+  const offset = (page - 1) * pageSize
 
-  const hasQ = q && String(q).trim() !== '';     // Do we have a non-empty search term?
+  // If q is non-empty, build a WHERE clause. ILIKE = case-insensitive match in Postgres.
+  const hasQ = q && String(q).trim() !== ''
   const where = hasQ
-    ? `WHERE first_name ILIKE $1 OR last_name ILIKE $1 OR phone_number ILIKE $1 OR health_issue ILIKE $1` // Case-insensitive search
-    : '';                                         //LIKE cares about case (“Ada” ≠ “ada”); ILIKE ignores case (“Ada” = “ada” = “ADA”)
-  const params = hasQ ? [`%${q}%`] : [];         // Parameterized value for $1 (prevents SQL injection) 
-  // If you put user text directly into your SQL, an attacker can sneak SQL code into it. 
-  // Use placeholders ($1, $2, …) and pass values separately. The database treats them as data, not code.
+    ? `WHERE first_name ILIKE $1 OR last_name ILIKE $1 OR phone_number ILIKE $1 OR health_issue ILIKE $1`
+    : ''
 
-  const countSql = `SELECT COUNT(*)::int AS total FROM patients ${where}`; // Count total matches for pagination UI
-  const { rows: countRows } = await query(countSql, params);               // Execute count
-  const total = countRows[0]?.total ?? 0;                                  // Total rows (0 if none)
+  // Use parameterized input to avoid SQL injection. $1 will be replaced by the array value below.
+  const params = hasQ ? [`%${q}%`] : []
 
-  const itemsSql = `                               
-    SELECT ${COLUMNS}                            -- Select paged items using the same output shape
+  // 1) Get the total count for pagination UI (how many results exist for this query?).
+  const countSql = `SELECT COUNT(*)::int AS total FROM patients ${where}`
+  const { rows: countRows } = await query(countSql, params)
+  const total = countRows[0]?.total ?? 0
+
+  // 2) Fetch the current page of items using LIMIT/OFFSET.
+  const itemsSql = `
+    SELECT ${COLUMNS}
     FROM patients
     ${where}
     ORDER BY id DESC
     LIMIT ${pageSize} OFFSET ${offset}
-  `;
-  const { rows: items } = await query(itemsSql, params); // Execute items query
+  `
+  const { rows: items } = await query(itemsSql, params)
 
-  return { items, total, page, pageSize };       // Return metadata + current page items
+  // Return both the items and the pagination info so the frontend can render controls.
+  return { items, total, page, pageSize }
 }
 
-// --------- GET ONE ---------
-export async function getPatient(id) {            // Fetch a single patient by id
+// ---------- GET ONE ----------
+// Fetch a single patient by id. Returns the row or null if not found.
+export async function getPatient(id) {
   const { rows } = await query(
-    `SELECT ${COLUMNS} FROM patients WHERE id = $1`, // Parameterized id-The id value is sent separately, so Postgres can’t treat it as SQL.
-    [id]
-  );
-  return rows[0] || null;                         // Return row or null if not found
+    `SELECT ${COLUMNS} FROM patients WHERE id = $1`,
+    [id] // Parameterized value for $1
+  )
+  return rows[0] || null
 }
 
-// --------- CREATE ---------
+// ---------- CREATE ----------
+// Insert a new patient. Optional fields can be null in the DB.
 export async function createPatient(p) {
-  // Note: send null for optional fields if undefined
   const { rows } = await query(
     `
-    INSERT INTO patients (first_name, last_name, age, phone_number, health_issue) -- Insert with snake_case columns
-    VALUES ($1, $2, $3, $4, $5)                                                   -- Parameterized values to prevent SQL injection
-    RETURNING ${COLUMNS}                                                          -- Return newly created row with aliases
+    INSERT INTO patients (first_name, last_name, age, phone_number, health_issue)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING ${COLUMNS}
     `,
     [
-      p.firstName,                           // $1
-      p.lastName,                            // $2
-      p.age ?? null,                         // $3 (null if undefined)
-      p.phoneNumber,                         // $4
-      p.healthIssue ?? null,                 // $5 (null if undefined)
+      p.firstName,           // $1
+      p.lastName,            // $2
+      p.age ?? null,         // $3 (null if undefined)
+      p.phoneNumber,         // $4
+      p.healthIssue ?? null, // $5 (null if undefined)
     ]
-  );
-  return rows[0];                             // Return the inserted row
+  )
+  return rows[0]
 }
 
-// --------- UPDATE (partial) ---------
-export async function updatePatient(id, p) {  // Partial update: only fields provided are updated
-  const map = {                               // Map camelCase keys → DB column names
+// ---------- UPDATE (partial) ----------
+// Updates only the fields provided (PATCH semantics). Unknown keys are ignored.
+export async function updatePatient(id, p) {
+  // Map JSON keys → DB columns
+  const map = {
     firstName: 'first_name',
     lastName: 'last_name',
     age: 'age',
     phoneNumber: 'phone_number',
     healthIssue: 'health_issue',
-  };
-
-  const fields = [];                           // Holds "col = $i" segments
-  const values = [];                           // Holds values for placeholders
-  let i = 1;                                   // Placeholder counter ($1, $2, ...)
-
-  for (const [key, value] of Object.entries(p)) { // Iterate over provided fields
-    if (value === undefined) continue;        // Skip keys not sent in PATCH
-    const col = map[key];                      // Find DB column for this key
-    if (!col) continue;                        // Ignore unknown keys
-    fields.push(`${col} = $${i++}`);           // Add "col = $i" to SET list
-    values.push(value);                        // Add value for $i
   }
 
-  if (fields.length === 0) {                   // If nothing to update...
-    // nothing to update, return current row
-    return await getPatient(id);               // ...just return current data
+  const fields = [] // e.g., ["first_name = $1", "age = $2", ...]
+  const values = [] // corresponding values for placeholders
+  let i = 1         // placeholder counter
+
+  // Build the SET clause dynamically from provided keys.
+  for (const [key, value] of Object.entries(p)) {
+    if (value === undefined) continue             // Skip keys not sent in PATCH
+    const col = map[key]
+    if (!col) continue                            // Skip unknown keys
+    fields.push(`${col} = $${i++}`)
+    values.push(value)
   }
 
-  values.push(id);                              // Last value is the WHERE id
+  // If nothing to update, just return the current row (no-op).
+  if (fields.length === 0) {
+    return await getPatient(id)
+  }
+
+  // WHERE id is the last placeholder.
+  values.push(id)
+
   const { rows } = await query(
-    `UPDATE patients SET ${fields.join(', ')} WHERE id = $${i} RETURNING ${COLUMNS}`, // Build dynamic SET safely
+    `UPDATE patients SET ${fields.join(', ')} WHERE id = $${i} RETURNING ${COLUMNS}`,
     values
-  );
-  return rows[0] || null;                       // Return updated row or null if not found
+  )
+  return rows[0] || null
 }
 
-// --------- DELETE ---------
-export async function deletePatient(id) {       // Delete by id
-  const { rowCount } = await query(`DELETE FROM patients WHERE id = $1`, [id]); // rowCount says how many rows deleted
-  return rowCount > 0;                          // True if a row was removed
+// ---------- DELETE ----------
+// Delete by id. Returns true if a row was deleted, false if nothing matched.
+export async function deletePatient(id) {
+  const { rowCount } = await query(`DELETE FROM patients WHERE id = $1`, [id])
+  return rowCount > 0
 }

@@ -19,8 +19,10 @@ function Health() {
         if (!r.ok) throw new Error(r.statusText);
         return r.json();
       })
-
       .then(setData) //If the request works, save the JSON into data.
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false))
+
       .catch((e) => setError(e.message)) //If the request fails, save the error text.
       .finally(() => setLoading(false)); //In either case (success or error), turn off the loading state.
   }, []);
