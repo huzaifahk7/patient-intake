@@ -12,40 +12,28 @@
  * Config:
  * - Reads the connection string from process.env.DATABASE_URL (set in .env).
  */
+// src/db.js
 
-import pkg from 'pg'
-const { Pool } = pkg
+import pkg from 'pg'                                      // ① Import the pg driver package (CommonJS compat).
+const { Pool } = pkg                                      // ② Get the Pool class (manages reusable connections).
 
-// Create one pool for the whole app.
-// Example DATABASE_URL in .env (adjust for your local password/DB name):
-//   DATABASE_URL=postgres://postgres:YOUR_PASSWORD@localhost:5432/patient_intake
+// ③ Create one pool for the entire process (module singleton).
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL
+  connectionString: process.env.DATABASE_URL,             // ④ Read DB URL from .env (e.g., postgres://user:pass@localhost:5432/patient_intake)
 })
 
 /**
  * query(text, params)
- * - text:   SQL with $1, $2 placeholders (e.g., 'SELECT * FROM patients WHERE id = $1')
- * - params: array of values to safely bind to placeholders (prevents SQL injection)
- *
- * Returns: the full pg Result object (rows, rowCount, etc.).
- * Also logs timing info to help you see how long queries take while learning/debugging.
+ * @param {string} text   SQL with placeholders, e.g. 'SELECT * FROM patients WHERE id = $1'
+ * @param {Array}  params Values for placeholders, e.g. [123]
+ * @returns pg.Result     Has .rows (array), .rowCount (number), etc.
  */
-export async function query(text, params) {
-  const start = Date.now()                     // Record start time (ms)
-  const res = await pool.query(text, params)   // Run the SQL via a pooled connection
-  const duration = Date.now() - start          // Compute how long it took (ms)
-  console.log('executed query', {
-    text,                                      // The SQL string (useful while debugging)
-    duration: `${duration}ms`,
-    rows: res.rowCount                         // How many rows were affected/returned
+export async function query(text, params) {               // ⑤ Exported helper used by all models.
+  const start = Date.now()                                 // ⑥ Timestamp before sending to DB (for timing).
+  const res = await pool.query(text, params)               // ⑦ Run the SQL via a pooled connection.
+  const duration = Date.now() - start                      // ⑧ Compute elapsed time in ms.
+  console.log('executed query', {                          // ⑨ Log basic info for learning/debugging.
+    text, duration: `${duration}ms`, rows: res.rowCount
   })
-  return res
+  return res                                               // ⑩ Return full pg result to caller.
 }
-
-/*
-Tip:
-- Always use parameterized queries with $1, $2, ... and pass values via "params".
-  That prevents SQL injection and keeps your code clean.
-- db.js is intentionally tiny so the rest of your app doesn't manage connections directly.
-*/

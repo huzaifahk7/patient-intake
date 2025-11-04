@@ -1,99 +1,63 @@
-// patients.routes.js
-// Purpose: Define HTTP endpoints for "patients". Each route validates input (Zod) and delegates
-//          database work to the model functions. Returns clean JSON responses for the frontend.
+// src/routes/patients.routes.js
 
-import { Router } from 'express'
+import { Router } from 'express'                           // ① Create a sub-router (mini app) for patients.
 import {
-    listPatientsPaged,
-    createPatient,
-    getPatient,
-    updatePatient,
-    deletePatient,
-} from '../models/patients.model.js'
+    listPatientsPaged, createPatient, getPatient,
+    updatePatient, deletePatient
+} from '../models/patients.model.js'                       // ② Model functions → they run the SQL.
 import {
-    patientCreateSchema,
-    patientUpdateSchema, // same rules as createSchema, but every field optional (for PATCH)
-} from '../schemas/patient.schema.js'
+    patientCreateSchema, patientUpdateSchema
+} from '../schemas/patient.schema.js'                      // ③ Zod schemas → shape & rules for POST/PATCH bodies.
 
-const r = Router() // A standalone mini-app for /api/patients routes
+import { validate } from '../middlewares/validate.js'      // ④ Middleware: validate req.body with a schema.
+import { asyncH } from '../middlewares/async.js'           // ⑤ Middleware: wrap async handlers to forward errors.
+import { ok, created, noContent } from '../utils/responses.js' // ⑥ Helpers to send common HTTP responses.
+import { parsePage, parsePageSize } from '../utils/pagination.js' // ⑦ Clamp/sanitize pagination inputs.
 
-// GET /api/patients?page=1&pageSize=10&q=term
-// Lists patients with pagination and optional search.
-r.get('/', async (req, res, next) => {
-    try {
-        const { page, pageSize, q } = req.query
-        const data = await listPatientsPaged({ page, pageSize, q })
-        res.json(data) // { items, total, page, pageSize }
-    } catch (err) {
-        next(err) // Pass unexpected errors to Express' global handler
-    }
-})
+const r = Router()                                         // ⑧ Build the patients router.
+
+// GET /api/patients?page=&pageSize=&q=
+// List patients with pagination + optional search.
+r.get('/', asyncH(async (req, res) => {                    // ⑨ Wrap in asyncH so thrown errors go to error handler.
+    const page = parsePage(req.query.page)                   // ⑩ Turn ?page= into a positive int or default 1.
+    const pageSize = parsePageSize(req.query.pageSize)       // ⑪ Turn ?pageSize= into [1..100] or default 10.
+    const q = (req.query.q ?? '').toString()                 // ⑫ Search text (string, possibly empty).
+    const data = await listPatientsPaged({ page, pageSize, q }) // ⑬ Ask model for paged results from DB.
+    ok(res, data)                                            // ⑭ 200 OK with { items, total, page, pageSize }.
+}))
 
 // POST /api/patients
-// Create a new patient. Validates the request body before inserting.
-r.post('/', async (req, res, next) => {
-    try {
-        const data = patientCreateSchema.parse(req.body) // throws if invalid
-        const created = await createPatient(data)
-        res.status(201).json(created) // 201 Created + new row
-    } catch (err) {
-        // If Zod threw a validation error, return a clear 400 with details.
-        if (err?.issues) {
-            return res.status(400).json({ error: 'ValidationError', details: err.issues })
-        }
-        next(err)
-    }
-})
+// Create a new patient (server-side validation via Zod).
+r.post('/', validate(patientCreateSchema), asyncH(async (req, res) => {
+    const createdRow = await createPatient(req.valid)        // ⑮ validate() put parsed body on req.valid.
+    created(res, createdRow)                                 // ⑯ 201 Created with the inserted row.
+}))
 
 // GET /api/patients/:id
-// Read a single patient by id.
-r.get('/:id', async (req, res, next) => {
-    try {
-        const id = Number(req.params.id) // URL params are strings → convert to number
-        const item = await getPatient(id)
-        if (!item) return res.status(404).json({ error: 'NotFound' })
-        res.json(item)
-    } catch (err) {
-        next(err)
-    }
-})
+// Fetch a single patient by id.
+r.get('/:id', asyncH(async (req, res) => {
+    const id = Number(req.params.id)                         // ⑰ Params are strings → convert to number.
+    const item = await getPatient(id)                        // ⑱ Ask model for row (or null).
+    if (!item) return res.status(404).json({ error: 'NotFound' }) // ⑲ If not found → 404.
+    ok(res, item)                                            // ⑳ Otherwise → 200 with the row.
+}))
 
 // PATCH /api/patients/:id
-// Partially update a patient. Only fields sent in the body are changed.
-r.patch('/:id', async (req, res, next) => {
-    try {
-        const id = Number(req.params.id)
-        const data = patientUpdateSchema.parse(req.body) // every field optional
-        const updated = await updatePatient(id, data)
-        if (!updated) return res.status(404).json({ error: 'NotFound' })
-        res.json(updated)
-    } catch (err) {
-        if (err?.issues) {
-            return res.status(400).json({ error: 'ValidationError', details: err.issues })
-        }
-        next(err)
-    }
-})
+// Partially update a patient. Only provided fields are changed.
+r.patch('/:id', validate(patientUpdateSchema), asyncH(async (req, res) => {
+    const id = Number(req.params.id)                         // ㉑ Convert :id to number.
+    const updated = await updatePatient(id, req.valid)       // ㉒ Model builds a dynamic UPDATE for provided keys.
+    if (!updated) return res.status(404).json({ error: 'NotFound' }) // ㉓ Missing id → 404.
+    ok(res, updated)                                         // ㉔ Return updated row.
+}))
 
 // DELETE /api/patients/:id
-// Delete a patient. Returns 204 on success, 404 if not found.
-r.delete('/:id', async (req, res, next) => {
-    try {
-        const id = Number(req.params.id)
-        const ok = await deletePatient(id)
-        if (!ok) return res.status(404).json({ error: 'NotFound' })
-        res.status(204).send() // 204 No Content
-    } catch (err) {
-        next(err)
-    }
-})
+// Remove a patient by id.
+r.delete('/:id', asyncH(async (req, res) => {
+    const id = Number(req.params.id)                         // ㉕ Convert :id to number.
+    const removed = await deletePatient(id)                  // ㉖ true if a row was deleted.
+    if (!removed) return res.status(404).json({ error: 'NotFound' }) // ㉗ Missing id → 404.
+    noContent(res)                                           // ㉘ 204 No Content on success.
+}))
 
-export default r
-
-/*
-Flow summary:
-- Router parses the request (params/body/query).
-- Zod (schemas) validates data for POST/PATCH; if invalid → 400 with details.
-- Model functions run parameterized SQL and return rows.
-- Responses are clean JSON: either a resource (200/201), nothing (204), or a clear error (404/400).
-*/
+export default r                                           // ㉙ Export router; mounted in app.js under /api/patients.
