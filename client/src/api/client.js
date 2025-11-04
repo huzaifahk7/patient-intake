@@ -1,17 +1,46 @@
-//this function is your one place to talk to the server and get JSON back.
+// client/src/api/client.js
 
-const BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api'; //Reads environment variable from .env & the frontend always knows where to send API requests.
+/**
+ * Purpose:
+ * A tiny, central helper for making HTTP calls from the frontend to your backend API.
+ * All UI code should use `http()` so your fetch logic and error handling stay consistent.
+ *
+ * How it connects:
+ * - Reads BASE URL from Vite env (client/.env: VITE_API_BASE)
+ * - Components call `http('/patients')`, `http('/patients/123', { method: 'PATCH', ... })`, etc.
+ */
 
+const BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api'
+// ^ Where to send all API requests.
+// - In dev, VITE_API_BASE is usually "http://localhost:4000/api".
+// - If not set, we default to localhost:4000/api.
+// - In production, you can point this at your deployed API (e.g., https://api.example.com/api).
 
-//Exports helper function used everywhere in UI to make HTTP requests. path is the API path (e.g., '/patients'). options lets you pass method, body, headers later (POST, PATCH).
-export async function http(path, options = {}) { 
-  const res = await fetch(`${BASE}${path}`, {                              // Sends the request with fetch & Builds the full URL by combining BASE (from .env) + path.
-    headers: { 'Content-Type': 'application/json' },                       //Sets a default header: Content-Type: application/json (most of our endpoints accept JSON).
-    ...options,                                                            //Spreads ...options so you can override method (GET, POST, etc.) and add a JSON body later
-  });
+/**
+ * http(path, options?)
+ * @param {string} path - The API path (e.g., '/patients', '/patients/3')
+ * @param {object} options - fetch options (method, body, headers). Defaults to {}.
+ * @returns {Promise<any>} - JSON from the server, or `null` if the server returned 204 No Content.
+ *
+ * Behavior:
+ * - Merges your options with a default JSON Content-Type header.
+ * - Throws a readable Error if `res.ok` is false (4xx/5xx).
+ * - Parses JSON automatically on success.
+ */
+export async function http(path, options = {}) {
+  const res = await fetch(`${BASE}${path}`, {
+    // Default header so most endpoints receive/return JSON.
+    headers: { 'Content-Type': 'application/json' },
+    // Allow callers to specify method/body/headers/etc. (these can override defaults).
+    ...options,
+  })
+
+  // If response code is not in the 200–299 range, try to parse JSON error and throw.
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));                        //“not OK”,If the backend replies with an error status we throw a readable error.
-    throw new Error(err.message || res.statusText);
+    const err = await res.json().catch(() => ({})) // If body isn't JSON, use empty object.
+    throw new Error(err.message || res.statusText)
   }
-  return res.status === 204 ? null : res.json();                           //Otherwise we give you the JSON reply.
+
+  // Many DELETE requests return 204 (No Content). In that case, return `null`.
+  return res.status === 204 ? null : res.json()
 }

@@ -1,81 +1,90 @@
 // client/src/PatientsList.jsx
-import { useEffect, useMemo, useState } from "react";    // State, effects, and memo helpers from React
-import { useLocation, Link } from "react-router-dom";    // Read route state (flash) + navigate links
-import { Patients } from "./api/patients";               // API wrapper for patients endpoints
-import Flash from "./components/Flash";                  // Tiny success message box
+// Purpose: Show a paginated, searchable table of patients with Edit/Delete actions.
+// Data flow: UI state → Patients.list({ page, pageSize, q }) → render table.
+
+import { useEffect, useMemo, useState } from "react"; // React state/effects/memo tools
+import { useLocation, Link } from "react-router-dom"; // Read flash message, build links to pages
+import { Patients } from "./api/patients"; // Patients API wrapper
+import Flash from "./components/Flash"; // Small green success box
 
 export default function PatientsList() {
-  const location = useLocation();                        // Access navigation state (e.g., flash messages)
-  const flash = location.state?.flash || null;           // Read optional "flash" message (e.g., after create/update)
+  // Read optional "flash" message (e.g., "Created!" from Create/Edit page)
+  const location = useLocation();
+  const flash = location.state?.flash || null;
 
-  // Table state
-  const [items, setItems] = useState([]);                // Current page of patients
-  const [total, setTotal] = useState(0);                 // Total matching rows (for pagination)
-  const [page, setPage] = useState(1);                   // Current page number (1-based)
-  const [pageSize, setPageSize] = useState(10);          // Rows per page
-  const [q, setQ] = useState("");                        // Search query string
+  // ------- Table & controls state -------
+  const [items, setItems] = useState([]); // Current page of rows
+  const [total, setTotal] = useState(0); // Total matching rows for pagination
+  const [page, setPage] = useState(1); // Current page (1-based)
+  const [pageSize, setPageSize] = useState(10); // Rows per page
+  const [q, setQ] = useState(""); // Search text
 
-  const [loading, setLoading] = useState(true);          // Show spinner/text while fetching
-  const [error, setError] = useState(null);              // Store error message if fetch fails
-  const [deletingId, setDeletingId] = useState(null);    // Track row being deleted to disable its button
+  // ------- Status flags -------
+  const [loading, setLoading] = useState(true); // Show "Loading…" while fetching
+  const [error, setError] = useState(null); // Error text if API call fails
+  const [deletingId, setDeletingId] = useState(null); // Row currently being deleted
 
-  function load() {                                      // Fetch data based on current page/pageSize/q
+  // Core fetcher: pulls data from server based on page/pageSize/q
+  function load() {
     setLoading(true);
     setError(null);
-    Patients.list({ page, pageSize, q })                 // Call backend with query params
-      .then(({ items, total, page, pageSize }) => {      // Destructure server response
-        setItems(items);                                 // Update table rows
-        setTotal(total);                                 // Update total for pagination
-        setPage(page);                                   // Keep page in sync (server may clamp invalid values)
-        setPageSize(pageSize);                           // Keep page size in sync (server may clamp invalid values)
+    Patients.list({ page, pageSize, q })
+      .then(({ items, total, page, pageSize }) => {
+        setItems(items);
+        setTotal(total);
+        // Keep page/pageSize in sync with server (server may clamp invalid values)
+        setPage(page);
+        setPageSize(pageSize);
       })
-      .catch((e) => setError(e.message))                 // Show a readable error
-      .finally(() => setLoading(false));                 // Stop loading state
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
   }
 
-  // Load when page/pageSize/q changes
+  // Fetch whenever page/pageSize/q change (and once on mount)
   useEffect(() => {
-    load();                                              // Fetch on first render and whenever deps change
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize, q]);                               // Re-run load when these change
+  }, [page, pageSize, q]);
 
-  // Paging helpers
-  const pageCount = useMemo(                             // Compute total pages (at least 1)
+  // Compute pagination info for "Showing X–Y of Z" and page count
+  const pageCount = useMemo(
     () => Math.max(1, Math.ceil(total / pageSize)),
     [total, pageSize]
   );
-  const start = total === 0 ? 0 : (page - 1) * pageSize + 1; // Start index for "Showing X–Y of Z"
-  const end = Math.min(total, page * pageSize);              // End index for "Showing X–Y of Z"
+  const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const end = Math.min(total, page * pageSize);
 
-  async function handleDelete(id) {                      // Delete a patient by id
-    const yes = window.confirm(`Delete patient #${id}? This cannot be undone.`); // Confirm destructive action
+  // Delete one row (with confirm). Option: reload list to keep counts correct.
+  async function handleDelete(id) {
+    const yes = window.confirm(`Delete patient #${id}? This cannot be undone.`);
     if (!yes) return;
     try {
-      setDeletingId(id);                                 // Disable the clicked Delete button
-      await Patients.remove(id);                         // Call DELETE /api/patients/:id
-      // Option 1: reload the page to refresh items & total
-      load();
-      // Option 2 (faster): setItems(prev => prev.filter(p => p.id !== id)); setTotal(t => t - 1);
+      setDeletingId(id);
+      await Patients.remove(id);
+      load(); // refresh table and counts
+      // Alternative: setItems(prev => prev.filter(p => p.id !== id)); setTotal(t => t - 1)
     } catch (e) {
-      alert(`Delete failed: ${e.message}`);              // Show simple error if request fails
+      alert(`Delete failed: ${e.message}`);
     } finally {
-      setDeletingId(null);                               // Re-enable Delete button
+      setDeletingId(null);
     }
   }
 
-  // Reset to first page when query changes (user starts a new search)
+  // Start a new search: update q and jump back to page 1
   function onSearchChange(e) {
-    setQ(e.target.value);                                // Update search term
-    setPage(1);                                          // Always jump back to page 1 for new searches
+    setQ(e.target.value);
+    setPage(1);
   }
 
+  // Change page size: update value and jump back to page 1
   function onPageSizeChange(e) {
-    setPageSize(Number(e.target.value));                 // Update page size
-    setPage(1);                                          // Reset to first page to avoid empty tails
+    setPageSize(Number(e.target.value));
+    setPage(1);
   }
 
   return (
     <div>
+      {/* Header bar */}
       <div
         style={{
           display: "flex",
@@ -83,13 +92,14 @@ export default function PatientsList() {
           alignItems: "center",
         }}
       >
-        <h2>All Patients</h2>                            {/* Page title */}
-        <Link to="/patients/new">+ New</Link>            {/* Create new patient link */}
+        <h2>All Patients</h2>
+        <Link to="/patients/new">+ New</Link>
       </div>
 
-      <Flash message={flash} />                          {/* Green success message if present */}
+      {/* Success flash message (e.g., after create/update) */}
+      <Flash message={flash} />
 
-      {/* Controls */}
+      {/* Controls: search, page size, pager */}
       <div
         style={{
           display: "flex",
@@ -99,14 +109,14 @@ export default function PatientsList() {
         }}
       >
         <input
-          value={q}                                      // Controlled input for search term
-          onChange={onSearchChange}                      // Update q and reset page
+          value={q}
+          onChange={onSearchChange}
           placeholder="Search name, phone, issue…"
           aria-label="Search patients"
         />
         <label>
           Page size:{" "}
-          <select value={pageSize} onChange={onPageSizeChange}>  {/* Page size selector */}
+          <select value={pageSize} onChange={onPageSizeChange}>
             <option value={5}>5</option>
             <option value={10}>10</option>
             <option value={25}>25</option>
@@ -114,16 +124,16 @@ export default function PatientsList() {
         </label>
         <div style={{ marginLeft: "auto" }}>
           <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}   // Go to previous page (min 1)
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1}
           >
             Prev
           </button>
           <span style={{ margin: "0 8px" }}>
-            Page {page} of {pageCount}                           {/* Page indicator */}
+            Page {page} of {pageCount}
           </span>
           <button
-            onClick={() => setPage((p) => Math.min(pageCount, p + 1))} // Next page (max pageCount)
+            onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
             disabled={page >= pageCount}
           >
             Next
@@ -131,27 +141,27 @@ export default function PatientsList() {
         </div>
       </div>
 
-      {/* Status blocks */}
-      {loading && <p>Loading patients…</p>}             {/* Loading state */}
+      {/* Status: loading / error / empty / table */}
+      {loading && <p>Loading patients…</p>}
 
       {error && (
         <div style={{ color: "red", marginTop: 8 }}>
-          <p>Error: {error}</p>                          {/* Error message */}
-          <button onClick={load}>Retry</button>          {/* Retry fetch */}
+          <p>Error: {error}</p>
+          <button onClick={load}>Retry</button>
         </div>
       )}
 
-      {!loading && !error && total === 0 && (            // Empty state (no matches)
+      {!loading && !error && total === 0 && (
         <p style={{ marginTop: 8 }}>
           No matching patients. Try a different search.
         </p>
       )}
 
-      {!loading && !error && total > 0 && (              // Table when we have rows
+      {!loading && !error && total > 0 && (
         <>
           <p style={{ margin: "4px 0" }}>
             Showing <strong>{start}</strong>–<strong>{end}</strong> of{" "}
-            <strong>{total}</strong>                      {/* Range summary */}
+            <strong>{total}</strong>
           </p>
           <table
             border="1"
@@ -168,7 +178,7 @@ export default function PatientsList() {
               </tr>
             </thead>
             <tbody>
-              {items.map((p) => (                         // Render each patient row
+              {items.map((p) => (
                 <tr key={p.id}>
                   <td>{p.id}</td>
                   <td>
@@ -178,16 +188,16 @@ export default function PatientsList() {
                   <td>{p.phoneNumber}</td>
                   <td>
                     <Link
-                      to={`/patients/${p.id}/edit`}       // Edit link navigates to edit page
+                      to={`/patients/${p.id}/edit`}
                       style={{ marginRight: 8 }}
                     >
                       Edit
                     </Link>
                     <button
-                      onClick={() => handleDelete(p.id)}  // Delete action
-                      disabled={deletingId === p.id}      // Disable if this row is being deleted
+                      onClick={() => handleDelete(p.id)}
+                      disabled={deletingId === p.id}
                     >
-                      {deletingId === p.id ? "Deleting…" : "Delete"} 
+                      {deletingId === p.id ? "Deleting…" : "Delete"}
                     </button>
                   </td>
                 </tr>

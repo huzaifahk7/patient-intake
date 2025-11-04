@@ -1,32 +1,40 @@
+/* client/src/validation/app.css
+ *
+ * Purpose:
+ * Demo/global styles from the Vite template.
+ * If you're not using these classes, you can delete or move them to a real global stylesheet (e.g., src/index.css).
+ *
+ * How it connects:
+ * Only affects your app if it is imported somewhere in your JS (e.g., in main.jsx or App.jsx).
+ */
+
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  max-width: 1280px;   /* Limit content width for nicer reading on very large screens */
+  margin: 0 auto;      /* Center horizontally */
+  padding: 2rem;       /* Add breathing room around content */
+  text-align: center;  /* Center text (demo choice; not required for your app) */
 }
 
 .logo {
   height: 6em;
   padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
+  will-change: filter;         /* Hint: this element’s filter might animate */
+  transition: filter 300ms;    /* Smooth hover transition */
 }
 .logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
+  filter: drop-shadow(0 0 2em #646cffaa); /* Blue glow on hover (demo) */
 }
 .logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+  filter: drop-shadow(0 0 2em #61dafbaa); /* React-colored glow on hover (demo) */
 }
 
+/* Simple infinite rotation animation used by the Vite starter */
 @keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
+/* Respect user preferences: only animate if user hasn't asked to reduce motion */
 @media (prefers-reduced-motion: no-preference) {
   a:nth-of-type(2) .logo {
     animation: logo-spin infinite 20s linear;
@@ -34,9 +42,9 @@
 }
 
 .card {
-  padding: 2em;
+  padding: 2em; /* Generic card padding (demo) */
 }
 
 .read-the-docs {
-  color: #888;
+  color: #888;  /* Subtle text color for helper text */
 }

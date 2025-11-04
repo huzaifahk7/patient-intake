@@ -1,18 +1,55 @@
 // client/src/api/patients.js
-import { http } from './client'                           // Shared fetch helper (adds base URL, JSON headers, error handling)
+// Purpose: A tiny wrapper specific to "patients" endpoints.
+// All components use these functions instead of calling fetch() directly.
 
-// Patients.list() calls http('/patients') → which becomes a GET to: http://localhost:4000/api/patients
+import { http } from './client' // Shared fetch helper (adds base URL, JSON headers, consistent errors)
+
 export const Patients = {
-    // Accept params and build a query string
-    list: ({ page = 1, pageSize = 10, q = '' } = {}) => { // Allow caller to pass page/pageSize/search
-        const u = new URLSearchParams()                   // Build ?page=..&pageSize=..&q=.. safely
+    /**
+     * list({ page, pageSize, q })
+     * - Calls GET /patients with pagination + search query.
+     * - Returns { items, total, page, pageSize } from the server.
+     */
+    list: ({ page = 1, pageSize = 10, q = '' } = {}) => {
+        // Build a safe query string like ?page=1&pageSize=10&q=abc
+        const u = new URLSearchParams()
         u.set('page', String(page))
         u.set('pageSize', String(pageSize))
-        if (q) u.set('q', q)                              // Only include q if non-empty
-        return http(`/patients?${u.toString()}`)          // Returns { items, total, page, pageSize } from server
+        if (q) u.set('q', q) // only include q if non-empty (keeps URL clean)
+        return http(`/patients?${u.toString()}`)
     },
-    get: (id) => http(`/patients/${id}`),             // GET one patient
-    create: (data) => http('/patients', { method: 'POST', body: JSON.stringify(data) }),  // POST create
-    update: (id, d) => http(`/patients/${id}`, { method: 'PATCH', body: JSON.stringify(d) }), // PATCH update
-    remove: (id) => http(`/patients/${id}`, { method: 'DELETE' }), // DELETE remove
+
+    /**
+     * get(id)
+     * - Calls GET /patients/:id to fetch one patient.
+     */
+    get: (id) => http(`/patients/${id}`),
+
+    /**
+     * create(data)
+     * - Calls POST /patients with a JSON body to create a patient.
+     */
+    create: (data) => http('/patients', {
+        method: 'POST',
+        body: JSON.stringify(data)
+    }),
+
+    /**
+     * update(id, data)
+     * - Calls PATCH /patients/:id with only the fields you want to change.
+     */
+    update: (id, d) => http(`/patients/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(d)
+    }),
+
+    /**
+     * remove(id)
+     * - Calls DELETE /patients/:id. Returns null on 204 No Content.
+     */
+    remove: (id) => http(`/patients/${id}`, { method: 'DELETE' }),
 }
+
+// Why this matters:
+// - All API calls for "patients" are centralized and consistent.
+// - If you ever change headers, base URL, or error handling, update http() once.

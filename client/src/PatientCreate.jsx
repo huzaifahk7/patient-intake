@@ -1,21 +1,25 @@
 // client/src/PatientCreate.jsx
-import { useForm } from "react-hook-form";
-import { useNavigate, Link } from "react-router-dom";
-import { Patients } from "./api/patients";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { patientCreateSchema } from "./validation/patientSchema";
+// Purpose: Create a new patient with client-side validation.
+// Flow: user fills form → Zod validates → POST /api/patients → navigate back with a flash.
+
+import { useForm } from "react-hook-form"; // Form state/validation controller
+import { useNavigate, Link } from "react-router-dom"; // Navigate on success; link back to list
+import { Patients } from "./api/patients"; // Patients API
+import { zodResolver } from "@hookform/resolvers/zod"; // Connect react-hook-form and Zod
+import { patientCreateSchema } from "./validation/patientSchema"; // Frontend validation rules
 
 export default function PatientCreate() {
   const navigate = useNavigate();
 
+  // Set up controlled form with defaults + validation
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting, isValid },
     reset,
   } = useForm({
-    mode: "onBlur", // validate when leaving a field
-    resolver: zodResolver(patientCreateSchema),
+    mode: "onBlur", // validate each field when it loses focus
+    resolver: zodResolver(patientCreateSchema), // run Zod schema automatically
     defaultValues: {
       firstName: "",
       lastName: "",
@@ -24,14 +28,12 @@ export default function PatientCreate() {
       healthIssue: "",
     },
   });
-  // 2) navigation helper (go back to /patients after success)
 
-  
-
+  // Submit handler (POST)
   async function onSubmit(data) {
     try {
-      await Patients.create(data);
-      reset(); // clear form
+      await Patients.create(data); // POST /api/patients
+      reset(); // Clear the form after success
       navigate("/patients", {
         state: { flash: "Patient created successfully." },
       });
@@ -39,6 +41,8 @@ export default function PatientCreate() {
       alert(`Create failed: ${e.message}`);
     }
   }
+
+  // UI
   return (
     <div style={{ maxWidth: 640 }}>
       <h2>New Patient</h2>
@@ -50,6 +54,7 @@ export default function PatientCreate() {
         onSubmit={handleSubmit(onSubmit)}
         style={{ marginTop: 16, display: "grid", gap: 12 }}
       >
+        {/* First Name */}
         <label>
           First Name
           <br />
@@ -63,6 +68,7 @@ export default function PatientCreate() {
           <span style={{ color: "red" }}>{errors.firstName.message}</span>
         )}
 
+        {/* Last Name */}
         <label>
           Last Name
           <br />
@@ -76,6 +82,7 @@ export default function PatientCreate() {
           <span style={{ color: "red" }}>{errors.lastName.message}</span>
         )}
 
+        {/* Age */}
         <label>
           Age (optional)
           <br />
@@ -90,6 +97,7 @@ export default function PatientCreate() {
           <span style={{ color: "red" }}>{errors.age.message}</span>
         )}
 
+        {/* Phone */}
         <label>
           Phone Number
           <br />
@@ -103,6 +111,7 @@ export default function PatientCreate() {
           <span style={{ color: "red" }}>{errors.phoneNumber.message}</span>
         )}
 
+        {/* Health Issue */}
         <label>
           Health Issue (optional)
           <br />
