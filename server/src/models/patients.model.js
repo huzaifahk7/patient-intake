@@ -2,7 +2,7 @@
 
 import { query } from '../db.js'                           // ① Shared helper to run SQL using the pg Pool.
 
-// ② Reusable column list with aliases: DB snake_case → API camelCase.
+// ② Reusable column list with aliases: DB snake_case → API camelCase - for Consistency with tooling and clean api
 const COLUMNS = `
   id,
   first_name   AS "firstName",
@@ -22,7 +22,7 @@ export async function listPatientsPaged({ page = 1, pageSize = 10, q = '' } = {}
   if (!Number.isInteger(page) || page < 1) page = 1
   if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) pageSize = 10
 
-  // ⑤ Compute LIMIT/OFFSET for the requested page.
+  // ⑤ Compute LIMIT/OFFSET for the requested page. LIMIT → return at most rows.OFFSET → skip rows first, then start returning rows
   const offset = (page - 1) * pageSize
 
   // ⑥ Build WHERE if we have a non-empty search term; ILIKE is case-insensitive LIKE in Postgres.
