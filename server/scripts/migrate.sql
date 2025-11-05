@@ -25,7 +25,7 @@ BEGIN
 END$$;
 
 -- 3) Trigger to auto-update updated_at on changes - Define a function that sets NEW.updated_at = now() before an UPDATE is saved.
-CREATE OR REPLACE FUNCTION set_updated_at()                                                 /* that automatically updates updated_at on every UPDATE.*/
+CREATE OR REPLACE FUNCTION set_updated_at()                                                
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = now();

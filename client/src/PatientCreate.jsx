@@ -1,45 +1,35 @@
-// --------------------------- IMPORTS ---------------------------
+// Purpose: Create a new patient via a form with client-side validation.
+// Talking points (say out loud):
+// - “I use react-hook-form to control the form and Zod to validate fields on blur.”
+// - “On submit, I convert age (a string from the input) into a number, or omit it if left empty.”
+// - “I send the payload to the backend with Patients.create(...). If it succeeds, I reset the form and navigate
+//    back to /patients with a green flash message.”
 
-// Import form handling utilities from react-hook-form
 import { useForm } from "react-hook-form";
-
-// Import navigation helpers from React Router
-// - useNavigate → programmatically go to another page (e.g., after saving)
-// - Link → clickable link for normal navigation
 import { useNavigate, Link } from "react-router-dom";
-
-// Import the Patients API wrapper that talks to our backend
 import { Patients } from "./api/patients";
-
-// Import the connector that lets react-hook-form use Zod for validation
 import { zodResolver } from "@hookform/resolvers/zod";
-
-// Import the validation schema (rules) for creating a patient
 import { patientCreateSchema } from "./validation/patientSchema";
 
-// Import reusable form UI components to keep layout consistent and clean
+// Reusable form atoms (consistent styling/markup)
 import FormField from "./components/common/FormField";
 import Input from "./components/common/Input";
 import Textarea from "./components/common/Textarea";
 import Button from "./components/common/Button";
 
-// --------------------------- COMPONENT ---------------------------
-
 export default function PatientCreate() {
-  // useNavigate gives us a function to move to another page (like redirect)
-  const navigate = useNavigate();
+  const navigate = useNavigate(); // For redirecting after success
 
-  // Initialize react-hook-form
+  // Set up the form: validate onBlur, use Zod rules, and start with empty fields
   const {
-    register, // connects <input> elements to the form system
-    handleSubmit, // wraps our custom onSubmit handler
-    formState: { errors, isSubmitting, isValid }, // live form status & errors
-    reset, // resets form fields (used after successful save)
+    register, // Connect inputs to the form
+    handleSubmit, // Wraps onSubmit with validation
+    formState: { errors, isSubmitting, isValid }, // Live info: errors, submit state, validity
+    reset, // Clear/reset the form after success
   } = useForm({
-    mode: "onBlur", // validates each field when the user leaves it
-    resolver: zodResolver(patientCreateSchema), // link validation rules
+    mode: "onBlur",
+    resolver: zodResolver(patientCreateSchema),
     defaultValues: {
-      // start with empty fields
       firstName: "",
       lastName: "",
       age: "",
@@ -48,60 +38,50 @@ export default function PatientCreate() {
     },
   });
 
-  // --------------------------- HANDLER ---------------------------
-
-  // Called when the user submits the form
+  // Submit handler (only called if validation passes)
   async function onSubmit(data) {
-    // react-hook-form gives numbers as strings, so we convert age properly
+    // Convert number-like fields: react-hook-form gives you strings from inputs
     const payload = {
       ...data,
-      age: data.age === "" ? undefined : Number(data.age), // empty string → undefined, otherwise number
+      age: data.age === "" ? undefined : Number(data.age), // empty string → omit; else number
     };
 
     try {
-      // Send POST /api/patients with form data to backend
-      await Patients.create(payload);
-
-      // Clear form fields after success
-      reset();
-
-      // Go back to patients list with a "flash" message shown there
+      await Patients.create(payload); // POST /api/patients
+      reset(); // Clear the form
       navigate("/patients", {
+        // Go back to list with a “flash” success
         state: { flash: "Patient created successfully." },
       });
     } catch (e) {
-      // If the API fails (like network/server error), show a popup alert
-      alert(`Create failed: ${e.message}`);
+      alert(`Create failed: ${e.message}`); // Show readable error
     }
   }
 
-  // --------------------------- RENDER ---------------------------
-
   return (
     <div style={{ maxWidth: 640 }}>
-      {/* Page title */}
       <h2>New Patient</h2>
 
-      {/* Back link for user convenience */}
+      {/* Convenience back link */}
       <p style={{ marginTop: 8 }}>
         <Link to="/patients">← Back to Patients</Link>
       </p>
 
-      {/* The actual form. handleSubmit wraps onSubmit and handles validation first. */}
+      {/* handleSubmit runs Zod validation first; if valid, calls onSubmit(cleanData) */}
       <form
         onSubmit={handleSubmit(onSubmit)}
         style={{ marginTop: 16, display: "grid", gap: 12 }}
       >
-        {/* ---------- First Name ---------- */}
+        {/* First Name */}
         <FormField label="First Name" error={errors.firstName?.message}>
           <Input
-            {...register("firstName")} // Connect input to form system
+            {...register("firstName")}
             placeholder="e.g., Grace"
-            aria-invalid={!!errors.firstName} // Accessibility: marks invalid if there's an error
+            aria-invalid={!!errors.firstName}
           />
         </FormField>
 
-        {/* ---------- Last Name ---------- */}
+        {/* Last Name */}
         <FormField label="Last Name" error={errors.lastName?.message}>
           <Input
             {...register("lastName")}
@@ -110,7 +90,7 @@ export default function PatientCreate() {
           />
         </FormField>
 
-        {/* ---------- Age ---------- */}
+        {/* Age */}
         <FormField label="Age (optional)" error={errors.age?.message}>
           <Input
             type="number"
@@ -120,7 +100,7 @@ export default function PatientCreate() {
           />
         </FormField>
 
-        {/* ---------- Phone Number ---------- */}
+        {/* Phone */}
         <FormField label="Phone Number" error={errors.phoneNumber?.message}>
           <Input
             {...register("phoneNumber")}
@@ -129,7 +109,7 @@ export default function PatientCreate() {
           />
         </FormField>
 
-        {/* ---------- Health Issue ---------- */}
+        {/* Health Issue */}
         <FormField label="Health Issue (optional)">
           <Textarea
             rows="4"
@@ -138,13 +118,9 @@ export default function PatientCreate() {
           />
         </FormField>
 
-        {/* ---------- Submit Button ---------- */}
-        <Button
-          type="submit"
-          disabled={isSubmitting || !isValid} // disable while saving or invalid
-        >
-          {isSubmitting ? "Creating…" : "Create Patient"} // text changes while
-          submitting
+        {/* Submit */}
+        <Button type="submit" disabled={isSubmitting || !isValid}>
+          {isSubmitting ? "Creating…" : "Create Patient"}
         </Button>
       </form>
     </div>

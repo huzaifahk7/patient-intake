@@ -1,44 +1,50 @@
-// PatientsList.jsx
-// Purpose: Show a paginated, searchable table of patients with Edit/Delete actions.
-// Now uses reusable UI atoms: Input, Button, Loading, ErrorBlock, Pagination, ConfirmButton.
+//Purpose: Show a paginated, searchable table of patients with Edit/Delete actions.
+// Talking points (say out loud):
+// - “This page keeps track of the table rows (items), total count, current page, page size, and the search text q.
+//    It also tracks loading/error so the UI can show a spinner or an error if something breaks.”
+// - “Whenever page, pageSize, or q change, it calls Patients.list(...) to fetch from the server.
+//    The server returns { items, total, page, pageSize } and I sync my local state with that.”
+// - “Typing in the search input updates q and jumps back to page 1. Pagination under the hood uses SQL LIMIT/OFFSET.”
+// - “Deleting a row calls Patients.remove(id), then I reload the list.”
+// - “If I just created or updated a patient, a small green flash message appears at the top.”
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, Link } from "react-router-dom";
 import { Patients } from "./api/patients";
 
-// Reusable UI components (your new common atoms)
+// Reusable UI atoms
 import Input from "./components/common/Input";
 import Button from "./components/common/Button";
 import Loading from "./components/common/Loading";
 import ErrorBlock from "./components/common/ErrorBlock";
 import Pagination from "./components/common/Pagination";
 import ConfirmButton from "./components/common/ConfirmButton";
-import Flash from "./components/Flash"; // your existing flash box (you can also move it under components/common)
+import Flash from "./components/Flash";
 
 export default function PatientsList() {
-  // Read optional flash message (e.g., “Created successfully”) passed via navigation state
+  // Read optional “flash” text sent from Create/Edit pages (e.g., “Patient created successfully.”)
   const location = useLocation();
   const flash = location.state?.flash || null;
 
-  // ------ Table state ------
-  const [items, setItems] = useState([]); // Current rows
-  const [total, setTotal] = useState(0); // Total matches (for pagination)
-  const [page, setPage] = useState(1); // Current page number
+  // ---------- Table state ----------
+  const [items, setItems] = useState([]); // Rows for the current page
+  const [total, setTotal] = useState(0); // Total matching rows (for pager + “Showing X–Y of Z”)
+  const [page, setPage] = useState(1); // Current page number (1-based)
   const [pageSize, setPageSize] = useState(10); // Rows per page
-  const [q, setQ] = useState(""); // Search text
+  const [q, setQ] = useState(""); // Search text (“name/phone/issue”)
 
-  // ------ Status flags ------
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [deletingId, setDeletingId] = useState(null); // disable a row’s delete button while in-flight
+  // ---------- Status flags ----------
+  const [loading, setLoading] = useState(true); // True while fetching
+  const [error, setError] = useState(null); // Error message if fetch fails
+  const [deletingId, setDeletingId] = useState(null); // Row currently being deleted (disables its button)
 
-  // Core loader: fetch page of rows from the server
+  // Core loader: call the backend using current page/pageSize/q
   function load() {
     setLoading(true);
     setError(null);
     Patients.list({ page, pageSize, q })
       .then(({ items, total, page, pageSize }) => {
-        // Keep local state in sync with server (server clamps invalid inputs)
+        // Keep local state in sync with server (server may clamp invalid inputs)
         setItems(items);
         setTotal(total);
         setPage(page);
@@ -48,21 +54,21 @@ export default function PatientsList() {
       .finally(() => setLoading(false));
   }
 
-  // Load when page/pageSize/q change (and on first render)
+  // Fetch on first render and whenever page/pageSize/q change
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize, q]);
 
-  // Compute pagination helpers for “Showing X–Y of Z” and button disabling
+  // Helpers for pager + “Showing X–Y of Z”
   const pageCount = useMemo(
     () => Math.max(1, Math.ceil(total / pageSize)),
     [total, pageSize]
   );
-  const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const end = Math.min(total, page * pageSize);
+  const start = total === 0 ? 0 : (page - 1) * pageSize + 1; // First row number on this page
+  const end = Math.min(total, page * pageSize); // Last row number on this page
 
-  // Delete a row with confirm (reload for accurate counts)
+  // Delete flow: confirm → DELETE → reload list so counts stay correct
   async function handleDelete(id) {
     try {
       setDeletingId(id);
@@ -75,13 +81,13 @@ export default function PatientsList() {
     }
   }
 
-  // When user types in search, update q and jump to page 1
+  // Search flow: update q and jump back to page 1 (fresh results)
   function onSearchChange(e) {
     setQ(e.target.value);
     setPage(1);
   }
 
-  // When user changes page size, update and jump to page 1 to avoid empties
+  // Page-size change: update size and reset to page 1 (avoid empty tail pages)
   function onPageSizeChange(e) {
     setPageSize(Number(e.target.value));
     setPage(1);
@@ -89,7 +95,7 @@ export default function PatientsList() {
 
   return (
     <div>
-      {/* Header row: title on the left, +New link on the right */}
+      {/* Header row: title + “New” link */}
       <div
         style={{
           display: "flex",
@@ -101,10 +107,10 @@ export default function PatientsList() {
         <Link to="/patients/new">+ New</Link>
       </div>
 
-      {/* Optional green success message (e.g., after create/edit) */}
+      {/* Optional green “flash” message (e.g., after create/edit) */}
       <Flash message={flash} />
 
-      {/* Controls row: search box, page size selector, and pager */}
+      {/* Controls: search, page size, pager */}
       <div
         style={{
           display: "flex",
@@ -113,7 +119,7 @@ export default function PatientsList() {
           margin: "12px 0",
         }}
       >
-        {/* Search input (controlled) */}
+        {/* Live search input */}
         <Input
           value={q}
           onChange={onSearchChange}
@@ -121,11 +127,12 @@ export default function PatientsList() {
           aria-label="Search patients"
           style={{ maxWidth: 300 }}
         />
-        {/* You can keep this button if you want an explicit “Search” action; not required for live search */}
+        {/* Optional manual search button (not required for live search) */}
         <Button variant="ghost" onClick={() => setPage(1)}>
           Search
         </Button>
 
+        {/* Page size dropdown */}
         <label style={{ marginLeft: 8 }}>
           Page size:{" "}
           <select value={pageSize} onChange={onPageSizeChange}>
@@ -135,7 +142,7 @@ export default function PatientsList() {
           </select>
         </label>
 
-        {/* Pager pushed to the right */}
+        {/* Pager aligned right */}
         <div style={{ marginLeft: "auto" }}>
           <Pagination
             page={page}
@@ -148,23 +155,25 @@ export default function PatientsList() {
 
       {/* Status blocks */}
       {loading && <Loading text="Loading patients…" />}
-
       {error && <ErrorBlock message={error} onRetry={load} />}
 
+      {/* Empty state */}
       {!loading && !error && total === 0 && (
         <p style={{ marginTop: 8 }}>
           No matching patients. Try a different search.
         </p>
       )}
 
-      {/* Table */}
+      {/* Table (only when we have rows) */}
       {!loading && !error && total > 0 && (
         <>
+          {/* “Showing X–Y of Z” summary */}
           <p style={{ margin: "4px 0" }}>
             Showing <strong>{start}</strong>–<strong>{end}</strong> of{" "}
             <strong>{total}</strong>
           </p>
 
+          {/* Basic table (could be swapped for a reusable <DataTable/>) */}
           <table
             border="1"
             cellPadding="6"
