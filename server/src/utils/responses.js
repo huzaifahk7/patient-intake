@@ -1,4 +1,4 @@
-// src/utils/responses.js
+// It’s a small helper that makes sending JSON responses cleaner and more consistent.
 
 // ① ok(res, data) → 200 JSON
 export const ok = (res, data) => res.json(data)

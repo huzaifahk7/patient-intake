@@ -1,8 +1,5 @@
-// src/middlewares/validate.js
-
-// ① validate(schema) returns an Express middleware that parses req.body with the given Zod schema.
-// ② On success: put the parsed value on req.valid and call next().
-// ③ On Zod error: return 400 with details (do not hit the route handler).
+// ***When a user sends data to the server, validate.js takes the Zod schema for that route and checks if the data in req.body is valid.
+/***If everything looks good, it saves clean data into req.valid so route can use it safely. If something’s wrong, it sends back 400 error with validation details instead of crashing.*/
 
 export const validate = (schema) => (req, res, next) => {
     try {

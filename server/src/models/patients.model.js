@@ -1,8 +1,8 @@
-// src/models/patients.model.js
+//*** */ The model contains all database operations..
 
-import { query } from '../db.js'                           // ① Shared helper to run SQL using the pg Pool.
+import { query } from '../db.js'                           // ***It imports a tiny query() helper from db.js so I don’t manage connections manually
 
-// ② Reusable column list with aliases: DB snake_case → API camelCase - for Consistency with tooling and clean api
+// *** Reusable column list with aliases: DB snake_case → API camelCase - for Consistency with tooling and clean api
 const COLUMNS = `
   id,
   first_name   AS "firstName",
@@ -14,30 +14,30 @@ const COLUMNS = `
   updated_at   AS "updatedAt"
 `;
 
-// ③ Pagination + search list (primary list endpoint).
+//*** Pagination + search list 
 export async function listPatientsPaged({ page = 1, pageSize = 10, q = '' } = {}) {
-  // ④ Normalize/clamp incoming numbers (defense-in-depth).
+  // ***clamp incoming numbers (defense-in-depth).
   page = Number(page)
   pageSize = Number(pageSize)
   if (!Number.isInteger(page) || page < 1) page = 1
   if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) pageSize = 10
 
-  // ⑤ Compute LIMIT/OFFSET for the requested page. LIMIT → return at most rows.OFFSET → skip rows first, then start returning rows
+  //  Compute LIMIT/OFFSET for the requested page. LIMIT → return at most rows.OFFSET → skip rows first, then start returning rows
   const offset = (page - 1) * pageSize
 
-  // ⑥ Build WHERE if we have a non-empty search term; ILIKE is case-insensitive LIKE in Postgres.
+  // *** Build WHERE if we have a non-empty search term; ILIKE is case-insensitive LIKE in Postgres.
   const hasQ = q && String(q).trim() !== ''
   const where = hasQ
     ? `WHERE first_name ILIKE $1 OR last_name ILIKE $1 OR phone_number ILIKE $1 OR health_issue ILIKE $1`
     : ''
-  const params = hasQ ? [`%${q}%`] : [] // ⑦ Parameter value for $1 (prevents SQL injection).
+  const params = hasQ ? [`%${q}%`] : [] // Parameter value for $1 (prevents SQL injection).
 
-  // ⑧ Count total matches for pagination UI.
+  // Count total matches for pagination UI.
   const countSql = `SELECT COUNT(*)::int AS total FROM patients ${where}`
   const { rows: countRows } = await query(countSql, params)
   const total = countRows[0]?.total ?? 0
 
-  // ⑨ Fetch the current page of rows using LIMIT/OFFSET.
+  // Fetch the current page of rows using LIMIT/OFFSET.
   const itemsSql = `
     SELECT ${COLUMNS}
     FROM patients
@@ -51,7 +51,7 @@ export async function listPatientsPaged({ page = 1, pageSize = 10, q = '' } = {}
   return { items, total, page, pageSize }
 }
 
-// ⑪ Read a single patient by id. Null if not found.
+//  Read a single patient by id. Null if not found.
 export async function getPatient(id) {
   const { rows } = await query(
     `SELECT ${COLUMNS} FROM patients WHERE id = $1`,
@@ -60,7 +60,7 @@ export async function getPatient(id) {
   return rows[0] || null
 }
 
-// ⑬ Insert a new patient row and return it.
+// Insert a new patient row and return it.
 export async function createPatient(p) {
   const { rows } = await query(
     `
@@ -69,11 +69,11 @@ export async function createPatient(p) {
     RETURNING ${COLUMNS}
     `,
     [
-      p.firstName,               // ⑭ $1
-      p.lastName,                // ⑮ $2
-      p.age ?? null,             // ⑯ $3 (null if undefined)
-      p.phoneNumber,             // ⑰ $4
-      p.healthIssue ?? null,     // ⑱ $5 (null if undefined)
+      p.firstName,               //  $1, $2 to prevent SQL injection
+      p.lastName,                //  $2
+      p.age ?? null,             //  $3 (null if undefined)
+      p.phoneNumber,             //  $4
+      p.healthIssue ?? null,     //  $5 (null if undefined)
     ]
   )
   return rows[0]
@@ -103,15 +103,15 @@ export async function updatePatient(id, p) {
     values.push(value)                                 // push actual value
   }
 
-  // ㉕ No fields to update → just return current row (no-op).
+  //  No fields to update → just return current row (no-op).
   if (fields.length === 0) {
     return await getPatient(id)
   }
 
-  // ㉖ Add id as the last placeholder in WHERE.
+  // Add id as the last placeholder in WHERE.
   values.push(id)
 
-  // ㉗ Perform the update and return the updated row (or null if id missing).
+  //  Perform the update and return the updated row (or null if id missing).
   const { rows } = await query(
     `UPDATE patients SET ${fields.join(', ')} WHERE id = $${i} RETURNING ${COLUMNS}`,
     values
@@ -119,7 +119,7 @@ export async function updatePatient(id, p) {
   return rows[0] || null
 }
 
-// ㉘ Delete a patient by id. Returns true if a row was removed.
+// Delete a patient by id. Returns true if a row was removed.
 export async function deletePatient(id) {
   const { rowCount } = await query(`DELETE FROM patients WHERE id = $1`, [id])
   return rowCount > 0
